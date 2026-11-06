@@ -7,19 +7,18 @@
 const STOP = new Set('a an the is are was were be of to in on for and or with what whats which who whos how hows why our we us me my i do does did any anything there this that it its at by from about show tell give list all can should could would where'.split(' '));
 
 const SYNONYMS = {
-  onboarding: ['onboard', 'go-live', 'playbook', 'readiness', 'defects', 'provisioning', 'integration', 'new customer', 'setup'],
-  onboard: ['onboard', 'go-live'], launch: ['go-live', 'onboard'], launches: ['go-live', 'onboard'], golive: ['go-live'],
   revenue: ['bookings', 'retention', 'revenue', 'pipeline'],
-  growth: ['bookings', 'pipeline', 'retention', 'growth'],
+  growth: ['bookings', 'pipeline', 'retention', 'revenue'],
   sales: ['pipeline', 'win', 'cycle', 'bookings'],
-  money: ['margin', 'bookings', 'revenue'], profit: ['margin'], profitability: ['margin', 'p&l'],
+  money: ['margin', 'bookings', 'revenue'], profit: ['margin', 'profitability'], profitability: ['margin', 'p&l', 'profitability'],
   margin: ['margin', 'p&l'], finance: ['margin', 'forecast', 'p&l'],
-  customers: ['csat', 'sla', 'escalations', 'retention'], customer: ['csat', 'sla', 'escalations'],
-  clients: ['csat', 'retention', 'onboard'], client: ['csat', 'onboard'],
-  people: ['attrition', 'leadership', 'leaders', 'lead'], talent: ['attrition', 'leadership', 'internally'],
-  hiring: ['internally', 'lead'], retention: ['attrition', 'retention'], attrition: ['attrition'],
-  tech: ['integration', 'provisioning', 'automate'], technology: ['integration', 'provisioning'],
-  engineering: ['integration', 'provisioning'], automation: ['automate', 'automated', 'provisioning'],
+  customers: ['churn', 'promoter', 'time-to-value', 'success', 'support', 'retention'], customer: ['churn', 'promoter', 'success', 'support'],
+  churn: ['churn', 'at-risk', 'retention'], loyalty: ['churn', 'promoter', 'retention'], nps: ['promoter'],
+  people: ['attrition', 'leadership', 'leaders'], talent: ['attrition', 'leadership', 'internally'],
+  hiring: ['internally', 'leadership'], retention: ['attrition', 'retention'], attrition: ['attrition'],
+  tech: ['roadmap', 'bugs'], technology: ['roadmap', 'bugs'], engineering: ['roadmap', 'bugs'], product: ['roadmap', 'bugs'],
+  bugs: ['bugs'], quality: ['bugs', 'promoter'], roadmap: ['roadmap'], shipping: ['roadmap'],
+  operations: ['processes', 'tools', 'friction'], process: ['processes'], tools: ['tools', 'software'],
   rhythm: ['check-ins', 'decisions', 'cadence'], decisions: ['decisions'],
 };
 
@@ -40,12 +39,12 @@ const Ask = {
   suggestions: [
     'What needs my attention this week?',
     'Which decisions are waiting on me?',
-    'Why is integration build time off track?',
+    'Why is critical bug resolution off track?',
     'Will we hit our Q4 bookings target?',
     'What changed since last week?',
     'Who hasn\'t checked in?',
     'How is Operations doing?',
-    'What is blocking onboarding?',
+    'What is blocking customer success?',
   ],
 
   hasClaude() { try { return !!localStorage.getItem('okr-claude-key'); } catch (e) { return false; } },
@@ -84,7 +83,7 @@ const Ask = {
       if (scope.person) ds = ds.filter((d) => d.decisionOwner === scope.person.id || d.owner === scope.person.id);
       if (!ds.length) return out('No decisions are waiting' + (scope.person ? ' on ' + scope.person.name : '') + '. Nothing is blocked on an executive call right now.');
       const lines = ds.map((d) => `- **${d.decision}** — asked by ${U.person(state, d.owner).name}, waiting ${d.age} days. Unblocks ${d.kr}: ${state.krs.find((k) => k.id === d.kr).title.toLowerCase()}. Ask: ${d.mitigation}`);
-      return out(`**${ds.length} decision${ds.length > 1 ? 's are' : ' is'} waiting${scope.person ? ' on ' + scope.person.name : ''}.** Oldest first:\n${lines.join('\n')}\n\nClearing the first one moves the most at-risk work.`, ds.map((d) => d.kr), ['What is blocking onboarding?', 'What needs my attention this week?']);
+      return out(`**${ds.length} decision${ds.length > 1 ? 's are' : ' is'} waiting${scope.person ? ' on ' + scope.person.name : ''}.** Oldest first:\n${lines.join('\n')}\n\nClearing the first one moves the most at-risk work.`, ds.map((d) => d.kr), ['What is blocking customer success?', 'What needs my attention this week?']);
     }
 
     // Stale check-ins
@@ -196,7 +195,6 @@ const Ask = {
 
   theme(rs) {
     const txt = rs.map((r) => (r.title + ' ' + r.impact).toLowerCase()).join(' ');
-    if ((txt.match(/integration/g) || []).length >= 2) return 'The common thread is **integration** — capacity and customer-side dependencies.';
     if ((txt.match(/capacity|pulled|double-booked|overtime/g) || []).length >= 2) return 'The common thread is **people capacity** being pulled in two directions.';
     return '';
   },
@@ -221,7 +219,7 @@ const Ask = {
     for (const t of state.teams) {
       if (t.id === 'co') continue;
       const n = t.name.toLowerCase();
-      const alias = { 'customer experience': /\bcx\b|customer experience|support/, operations: /\boperations\b|\bops\b/, technology: /\btechnology\b|\bengineering team\b|\btech team\b/, people: /\bpeople team\b|\bhr\b|people function/, finance: /\bfinance\b|\bfp&a\b/, sales: /\bsales team\b|\bsales org\b|\bsales\b(?! cycle)/ }[n];
+      const alias = { 'customer success': /customer success|\bcs team\b/, operations: /\boperations\b|\bops\b/, 'product & engineering': /\bproduct (and|&) engineering\b|\bengineering team\b|\btech team\b/, people: /\bpeople team\b|\bhr\b|people function/, finance: /\bfinance\b|\bfp&a\b/, sales: /\bsales team\b|\bsales org\b|\bsales\b(?! cycle)/ }[n];
       if (alias ? alias.test(q) : q.includes(n)) {
         const objs = state.objectives.filter((o) => o.team === t.id);
         // include company-level KRs owned by that team's leaders too
