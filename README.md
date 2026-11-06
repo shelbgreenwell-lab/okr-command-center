@@ -1,10 +1,10 @@
 # OKR Command Center
 
-**An OKR operating system for executive operations teams** — not just a place to store goals, but the weekly rhythm that keeps them honest: alignment, check-ins, risks, decisions, an auto-written exec brief, and an assistant an executive can simply ask.
+**An OKR operating system for executive operations teams, in any industry** — not just a place to store goals, but the weekly rhythm that keeps them honest: alignment, check-ins, risks, decisions, an auto-written exec brief, and an assistant an executive can simply ask.
 
 **[Open the live demo →](https://shelbgreenwell-lab.github.io/okr-command-center/)** · no login, works on desktop and phone
 
-> The demo runs on a fictional company (Meridian Group, a 1,400-person BPO) six weeks into Q4. All names and numbers are invented.
+> The demo runs on a fictional company (Meridian Group, 1,400 people) six weeks into Q4. All names and numbers are invented.
 
 ---
 

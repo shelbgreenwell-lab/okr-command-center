@@ -7,15 +7,15 @@
 const STOP = new Set('a an the is are was were be of to in on for and or with what whats which who whos how hows why our we us me my i do does did any anything there this that it its at by from about show tell give list all can should could would where'.split(' '));
 
 const SYNONYMS = {
-  launch: ['launch', 'go-live', 'playbook', 'readiness', 'defects', 'provisioning', 'integration'],
-  launches: ['launch'], golive: ['go-live'],
+  onboarding: ['onboard', 'go-live', 'playbook', 'readiness', 'defects', 'provisioning', 'integration', 'new customer', 'setup'],
+  onboard: ['onboard', 'go-live'], launch: ['go-live', 'onboard'], launches: ['go-live', 'onboard'], golive: ['go-live'],
   revenue: ['bookings', 'retention', 'revenue', 'pipeline'],
   growth: ['bookings', 'pipeline', 'retention', 'growth'],
   sales: ['pipeline', 'win', 'cycle', 'bookings'],
   money: ['margin', 'bookings', 'revenue'], profit: ['margin'], profitability: ['margin', 'p&l'],
   margin: ['margin', 'p&l'], finance: ['margin', 'forecast', 'p&l'],
   customers: ['csat', 'sla', 'escalations', 'retention'], customer: ['csat', 'sla', 'escalations'],
-  clients: ['csat', 'retention', 'launch'], client: ['csat', 'launch'],
+  clients: ['csat', 'retention', 'onboard'], client: ['csat', 'onboard'],
   people: ['attrition', 'leadership', 'leaders', 'lead'], talent: ['attrition', 'leadership', 'internally'],
   hiring: ['internally', 'lead'], retention: ['attrition', 'retention'], attrition: ['attrition'],
   tech: ['integration', 'provisioning', 'automate'], technology: ['integration', 'provisioning'],
@@ -45,7 +45,7 @@ const Ask = {
     'What changed since last week?',
     'Who hasn\'t checked in?',
     'How is Operations doing?',
-    'What is blocking launches?',
+    'What is blocking onboarding?',
   ],
 
   hasClaude() { try { return !!localStorage.getItem('okr-claude-key'); } catch (e) { return false; } },
@@ -84,7 +84,7 @@ const Ask = {
       if (scope.person) ds = ds.filter((d) => d.decisionOwner === scope.person.id || d.owner === scope.person.id);
       if (!ds.length) return out('No decisions are waiting' + (scope.person ? ' on ' + scope.person.name : '') + '. Nothing is blocked on an executive call right now.');
       const lines = ds.map((d) => `- **${d.decision}** — asked by ${U.person(state, d.owner).name}, waiting ${d.age} days. Unblocks ${d.kr}: ${state.krs.find((k) => k.id === d.kr).title.toLowerCase()}. Ask: ${d.mitigation}`);
-      return out(`**${ds.length} decision${ds.length > 1 ? 's are' : ' is'} waiting${scope.person ? ' on ' + scope.person.name : ''}.** Oldest first:\n${lines.join('\n')}\n\nClearing the first one moves the most at-risk work.`, ds.map((d) => d.kr), ['What is blocking launches?', 'What needs my attention this week?']);
+      return out(`**${ds.length} decision${ds.length > 1 ? 's are' : ' is'} waiting${scope.person ? ' on ' + scope.person.name : ''}.** Oldest first:\n${lines.join('\n')}\n\nClearing the first one moves the most at-risk work.`, ds.map((d) => d.kr), ['What is blocking onboarding?', 'What needs my attention this week?']);
     }
 
     // Stale check-ins
@@ -196,7 +196,7 @@ const Ask = {
 
   theme(rs) {
     const txt = rs.map((r) => (r.title + ' ' + r.impact).toLowerCase()).join(' ');
-    if ((txt.match(/integration/g) || []).length >= 2) return 'The common thread is **integration** — capacity and client-side dependencies.';
+    if ((txt.match(/integration/g) || []).length >= 2) return 'The common thread is **integration** — capacity and customer-side dependencies.';
     if ((txt.match(/capacity|pulled|double-booked|overtime/g) || []).length >= 2) return 'The common thread is **people capacity** being pulled in two directions.';
     return '';
   },
@@ -233,7 +233,7 @@ const Ask = {
     let tokens = q.replace(/[^a-z0-9&\- ]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w) && w.length > 2);
     const expanded = new Set(tokens);
     tokens.forEach((w) => (SYNONYMS[w] || []).forEach((s) => expanded.add(s)));
-    const generic = new Set(['week', 'track', 'risk', 'needs', 'attention', 'quarter', 'target', 'hit', 'changed', 'since', 'last', 'blocking', 'blocked', 'decisions', 'waiting', 'off', 'behind', 'doing', 'going', 'status', 'okrs', 'okr', 'results', 'key', 'objectives', 'checked', 'check', 'hasn', 'update', 'drop', 'confidence', 'wins', 'win', 'attention', 'working', 'doing', 'how', 'are']);
+    const generic = new Set(['week', 'track', 'risk', 'needs', 'attention', 'quarter', 'target', 'hit', 'changed', 'since', 'last', 'blocking', 'blocked', 'decisions', 'waiting', 'off', 'behind', 'doing', 'going', 'status', 'okrs', 'okr', 'results', 'key', 'objectives', 'checked', 'check', 'hasn', 'update', 'drop', 'confidence', 'wins', 'win', 'customer', 'customers', 'attention', 'working', 'doing', 'how', 'are']);
     const scored = state.krs.map((k) => {
       const hay = (k.title + ' ' + U.obj(state, k.obj).title).toLowerCase();
       let s = 0;
@@ -242,7 +242,7 @@ const Ask = {
     }).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
     if (scored.length) {
       const best = scored[0].s;
-      const krs = scored.filter((x) => x.s >= Math.max(2, best * 0.5)).map((x) => x.k);
+      const krs = scored.filter((x) => x.s >= Math.max(1, Math.floor(best * 0.4))).map((x) => x.k);
       if (krs.length) return { krs, label: krs.length === 1 ? krs[0].title : 'this area' };
     }
     return {};
