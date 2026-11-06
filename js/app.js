@@ -1,6 +1,6 @@
 /* App shell: state, routing, views, charts, forms. No framework, no build step. */
 
-const STORE_KEY = 'okr-system-v1';
+const STORE_KEY = 'okr-system-v2';
 let state;
 let askThread = [];
 
