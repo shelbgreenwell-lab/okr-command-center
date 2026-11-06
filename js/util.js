@@ -8,6 +8,8 @@ const U = {
     const n = Number(v).toFixed(kr.dp);
     if (kr.unit === '$M') return '$' + n + 'M';
     if (kr.unit === '%') return n + '%';
+    if (kr.unit === '$') return '$' + n;
+    if (kr.unit === '×') return n + '×';
     return n + (kr.unit || '');
   },
   person(state, id) { return state.people.find((p) => p.id === id) || { name: 'Unassigned', title: '' }; },

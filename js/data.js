@@ -314,8 +314,99 @@ const DEMO_CHECKIN_DATES = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-2
 
 function roundTo(v, dp) { const m = Math.pow(10, dp); return Math.round(v * m) / m; }
 
-function buildDemo() {
-  const s = JSON.parse(JSON.stringify(SEED));
+/* ---- Metric definitions: [definition, source system, refresh] per key result.
+   Overrides add a second source (to show reconciliation) or an old verification date. */
+const B2B_METRICS = {
+  KR1: ['ARR today from customers who were customers 12 months ago (incl. expansion, contraction, churn) ÷ their ARR 12 months ago', 'Billing system', 'monthly'],
+  KR2: ['Signed contract value of new-customer deals closed this quarter', 'CRM', 'daily'],
+  KR3: ['(Revenue − cost of revenue) ÷ revenue, from month-end close', 'ERP', 'monthly'],
+  KR4: ['Open opportunities at stage 2+ with a close date next quarter', 'CRM', 'daily'],
+  KR5: ['Won ÷ (won + lost) for stage 2+ opportunities closed in the last 90 days', 'CRM', 'weekly'],
+  KR6: ['Median days from stage 2 to closed-won, last 90 days', 'CRM', 'weekly'],
+  KR7: ['Top-20 accounts with a reconciled account-level P&L', 'Finance model', 'monthly'],
+  KR8: ['1 − |actual − forecast| ÷ forecast for monthly revenue, forecast set on day 1', 'Finance model', 'monthly'],
+  KR9: ['ARR lost to cancellations and downgrades, trailing 12 months ÷ starting ARR', 'Billing system', 'monthly'],
+  KR10: ['% promoters − % detractors, rolling relationship survey', 'Survey tool', 'weekly'],
+  KR11: ['Median days from contract signature to first value milestone', 'Customer success platform', 'weekly'],
+  KR12: ['Accounts with a success plan updated in the last 90 days ÷ active accounts', 'Customer success platform', 'weekly'],
+  KR13: ['At-risk accounts back to healthy within 30 days of being flagged ÷ accounts flagged', 'Customer success platform', 'weekly'],
+  KR14: ['Median hours from ticket creation to first human reply', 'Support desk', 'daily'],
+  KR15: ['Committed roadmap items shipped by the committed date ÷ items committed', 'Project tracker', 'weekly'],
+  KR16: ['Median days to resolve severity-1 bugs, last 30 days', 'Issue tracker', 'daily'],
+  KR17: ['Teams with a check-in in the last 8 days ÷ teams with OKRs', 'OKR Command Center', 'weekly'],
+  KR19: ['Regretted leavers, annualized ÷ average headcount', 'HR system', 'monthly'],
+  KR20: ['Managers who completed every program module', 'Learning platform', 'monthly'],
+  KR21: ['Leadership roles filled internally ÷ leadership roles filled, year to date', 'Applicant tracking', 'monthly'],
+  KR23: ['Software tools with active paid licenses', 'Procurement', 'monthly'],
+};
+const B2B_METRIC_OVERRIDES = {
+  KR2: { sources: [{ system: 'CRM', value: 1.3 }, { system: 'Finance ledger', value: 1.15 }], tolerance: 3, note: 'CRM counts deals marked closed-won before the contract is countersigned.' },
+  KR9: { sources: [{ system: 'Billing system', value: 7.9 }, { system: 'Customer success platform', value: 6.8 }], tolerance: 5, note: 'The customer success platform leaves out downgrades.' },
+  KR11: { lastVerified: '2026-09-18' },
+  KR15: { lastVerified: '2026-09-25' },
+  KR19: { lastVerified: '2026-08-29' },
+};
+
+/* Extra detail for decisions that are waiting, so each one reads as a decision record. */
+const B2B_DECISIONS = {
+  R1: { context: 'Critical bug fixes are slipping because two engineers are on incident remediation.', options: ['Approve two contractors for 10 weeks (~$140K)', 'Pull two engineers off the data platform upgrade', 'Accept slower fixes this quarter'], recommendation: 'Approve two contractors for 10 weeks (~$140K)', consulted: ['so', 'tb'], neededBy: '2026-11-07' },
+  R2: { context: 'Marketing-sourced pipeline fell 30% after paid campaigns were paused.', options: ['Restart top two campaigns at 60% of prior spend', 'Restart all campaigns at full spend', 'Keep paused and push partner referrals'], recommendation: 'Restart top two campaigns at 60% of prior spend', consulted: ['er', 'pn'], neededBy: '2026-11-06' },
+  R3: { context: 'Account managers carry 62 accounts each against a target of 40, so recoveries start late.', options: ['Move the 40 smallest accounts to a pooled success model', 'Hire two account managers', 'Raise the recovery window to 45 days'], recommendation: 'Move the 40 smallest accounts to a pooled success model', consulted: ['tb', 'pn'], neededBy: '2026-11-10' },
+  R5: { context: 'A $0.9M deal is stuck on the liability cap in legal review.', options: ['CEO-to-CEO call this week', 'Accept a higher liability cap', 'Let it slip to next quarter'], recommendation: 'CEO-to-CEO call this week', consulted: ['er'], neededBy: '2026-11-07' },
+};
+
+/* Recurring leadership meetings. Next dates are computed from the app date. */
+function makeCadence(coo, ceo) {
+  return [
+    { id: 'M1', name: 'Weekly exec staff', freq: 'weekly', weekday: 1, minutes: 60, owner: coo, attendees: 'Executive team', preread: 'staff',
+      purpose: 'Make the decisions that are waiting and unblock cross-team issues.',
+      rights: 'Decides anything on the waiting list; spend over $250K goes to the CEO.', output: 'Decisions logged with rationale; owners and dates for follow-ups.' },
+    { id: 'M2', name: 'Weekly business review', freq: 'weekly', weekday: 4, minutes: 45, owner: coo, attendees: 'Executive team + key result owners on the agenda', preread: 'wbr',
+      purpose: 'Off-track goals and overdue commitments only — green items are not discussed.',
+      rights: 'Agrees recovery actions; escalates decisions to exec staff.', output: 'New commitments with owners and dates.' },
+    { id: 'M3', name: 'Monthly business review', freq: 'monthly', weekday: 2, minutes: 90, owner: coo, attendees: 'Executive team + finance and data leads', preread: 'mbr',
+      purpose: 'Certify the numbers, then go deep on value at risk, resourcing and leading indicators.',
+      rights: 'Approves metric definitions; reallocates people and budget within the quarter.', output: 'Certified metrics; resourcing changes.' },
+    { id: 'M4', name: 'Quarterly business review', freq: 'quarterly', minutes: 240, owner: ceo, attendees: 'Executive team + team leads', preread: 'qbr',
+      purpose: 'Score the quarter, check how well we set goals, and agree next quarter\'s OKRs.',
+      rights: 'Sets company objectives and resourcing for next quarter.', output: 'Final scores; next quarter\'s objectives and owners.' },
+    { id: 'M5', name: 'Leadership offsite', freq: 'semiannual', date: '2027-01-21', minutes: 960, owner: ceo, attendees: 'Executive team', preread: 'offsite',
+      purpose: 'Strategy, annual priorities and how the leadership team is working.',
+      rights: 'Sets annual priorities and the company operating plan.', output: 'Annual priorities; changes to the operating system itself.' },
+  ];
+}
+
+const PROFILES = {
+  b2b: {
+    label: 'B2B software company',
+    seed: SEED, extra: KR_EXTRA, commitments: SEED_COMMITMENTS, initiatives: SEED_INITIATIVES, deps: SEED_DEPS, history: SEED_HISTORY,
+    metrics: B2B_METRICS, metricOverrides: B2B_METRIC_OVERRIDES, decisionDetail: B2B_DECISIONS, cadence: () => makeCadence('ml', 'dw'),
+    decisions: [
+      { id: 'D1', requested: '2026-10-08', date: '2026-10-12', title: 'Adopt one success plan template for all accounts', owner: 'tb', status: 'made', kr: 'KR12', rationale: 'Three templates in use made coverage impossible to measure.' },
+      { id: 'D2', requested: '2026-10-21', date: '2026-10-26', title: 'Add weekend support coverage in two regions', owner: 'tb', status: 'made', kr: 'KR14', rationale: 'Weekend tickets were waiting 30+ hours for a first reply.' },
+    ],
+    suggestions: ['What needs my attention this week?', 'Which decisions are waiting on me?', 'Why is critical bug resolution off track?', 'Will we hit our Q4 bookings target?',
+      'What changed since last week?', 'Which numbers can we trust?', 'How much value is at risk?', 'What commitments are overdue?', 'Who is waiting on another team?',
+      'How do we get bookings back on track?', 'What is blocking customer success?', 'Where are our people and budget going?', 'Are our targets too safe or too ambitious?', 'What meetings are coming up?'],
+  },
+};
+
+function buildMetrics(p, krs) {
+  const out = [];
+  krs.forEach((k) => {
+    const def = p.metrics[k.id]; if (!def) return;
+    const o = (p.metricOverrides || {})[k.id] || {};
+    out.push({ id: 'M-' + k.id, kr: k.id, name: k.title, definition: def[0], source: def[1], refresh: def[2], owner: k.owner,
+      lastVerified: o.lastVerified || '2026-11-02', sources: o.sources || [{ system: def[1], value: k.current }], tolerance: o.tolerance || 2, note: o.note || '' });
+  });
+  return out;
+}
+
+function buildDemo(profileId) {
+  const p = PROFILES[profileId] || PROFILES.b2b;
+  const s = JSON.parse(JSON.stringify(p.seed));
+  s.meta.profile = PROFILES[profileId] ? profileId : 'b2b';
+  s.meta.suggestions = p.suggestions;
   s.krs = s.krs.map((k) => {
     const n = k.conf.length;
     const checkins = [];
@@ -325,27 +416,21 @@ function buildDemo() {
       // small deterministic wobble so the history doesn't look machine-made
       const wobble = i < n - 1 ? Math.sin((k.id.length + i) * 1.7) * 0.04 * (k.current - k.start) : 0;
       const value = roundTo(k.start + (k.current - k.start) * f + wobble, k.dp);
-      const noteIdx = n - 1 - i; // notes are latest-first
-      checkins.push({
-        date: DEMO_CHECKIN_DATES[i],
-        value,
-        confidence: k.conf[i],
-        note: k.notes[noteIdx] || '',
-        by: k.owner,
-      });
+      checkins.push({ date: DEMO_CHECKIN_DATES[i], value, confidence: k.conf[i], note: k.notes[n - 1 - i] || '', by: k.owner });
     }
     const out = { ...k, checkins };
     delete out.conf; delete out.notes; delete out.curve; delete out.stale;
-    Object.assign(out, JSON.parse(JSON.stringify(KR_EXTRA[k.id] || {})));
+    Object.assign(out, JSON.parse(JSON.stringify(p.extra[k.id] || {})));
     return out;
   });
-  s.decisions = [
-    { id: 'D1', date: '2026-10-12', title: 'Adopt one success plan template for all accounts', owner: 'tb', status: 'made', kr: 'KR12' },
-    { id: 'D2', date: '2026-10-26', title: 'Add weekend support coverage in two regions', owner: 'tb', status: 'made', kr: 'KR14' },
-  ];
-  s.commitments = JSON.parse(JSON.stringify(SEED_COMMITMENTS));
-  s.initiatives = JSON.parse(JSON.stringify(SEED_INITIATIVES));
-  s.deps = JSON.parse(JSON.stringify(SEED_DEPS));
-  s.history = JSON.parse(JSON.stringify(SEED_HISTORY));
+  s.risks.forEach((r) => Object.assign(r, JSON.parse(JSON.stringify((p.decisionDetail || {})[r.id] || {}))));
+  const copy = (x) => JSON.parse(JSON.stringify(x));
+  s.decisions = copy(p.decisions);
+  s.commitments = copy(p.commitments);
+  s.initiatives = copy(p.initiatives);
+  s.deps = copy(p.deps);
+  s.history = copy(p.history);
+  s.metrics = buildMetrics(p, s.krs);
+  s.cadence = p.cadence();
   return s;
 }

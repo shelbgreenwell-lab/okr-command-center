@@ -1,15 +1,23 @@
 /* App shell: state, routing, views, charts, forms. No framework, no build step. */
 
-const STORE_KEY = 'okr-system-v4';
+const STORE_KEY = 'okr-system-v6';
 let state;
 let askThread = [];
 
 /* ---------------- State ---------------- */
-function load() {
-  try { const s = localStorage.getItem(STORE_KEY); if (s) return JSON.parse(s); } catch (e) {}
-  return buildDemo();
+/* Each demo company keeps its own saved data, so switching never loses edits. */
+function currentProfile() { try { return localStorage.getItem('okr-profile') || 'b2b'; } catch (e) { return 'b2b'; } }
+function load(profile) {
+  const p = profile || currentProfile();
+  try { const s = localStorage.getItem(STORE_KEY + '-' + p); if (s) return JSON.parse(s); } catch (e) {}
+  return buildDemo(p);
 }
-function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+function save() { try { localStorage.setItem(STORE_KEY + '-' + state.meta.profile, JSON.stringify(state)); localStorage.setItem('okr-profile', state.meta.profile); } catch (e) {} }
+function switchProfile(p) {
+  save(); state = load(p); askThread = []; checkinPerson = null;
+  try { localStorage.setItem('okr-profile', p); } catch (e) {}
+  loadSince(); closeDrawer(); render(); toast('Showing the ' + PROFILES[p].label.toLowerCase() + ' demo');
+}
 function commit(msg) { save(); render(); if (msg) toast(msg); }
 
 /* ---------------- Small UI pieces ---------------- */
@@ -120,10 +128,12 @@ const VIEWS = {
   okrs: { label: 'OKRs & alignment', icon: '⌥', render: viewOkrs },
   checkin: { label: 'Weekly check-in', icon: '✓', render: viewCheckin },
   review: { label: 'Weekly review', icon: '↻', render: viewReview },
+  cadence: { label: 'Operating cadence', icon: '▦', render: viewCadence },
   risks: { label: 'Risks & decisions', icon: '⚑', render: viewRisks },
-  initiatives: { label: 'Initiatives & resources', icon: '▤', render: viewInitiatives, group: 'Plan & resource' },
+  initiatives: { label: 'Initiatives & resources', icon: '▤', render: viewInitiatives, group: 'Plan & govern' },
   deps: { label: 'Dependencies', icon: '⇄', render: viewDeps },
   history: { label: 'Quarter history', icon: '◷', render: viewHistory },
+  metrics: { label: 'Metric definitions', icon: '≡', render: viewMetrics },
   brief: { label: 'Weekly exec brief', icon: '☰', render: viewBrief, group: 'Report' },
   board: { label: 'Board one-pager', icon: '▣', render: viewBoard },
   ask: { label: 'Ask', icon: '✦', render: viewAsk },
@@ -136,8 +146,10 @@ function render() {
   const r = route();
   const q = Engine.quarter(state);
   const overdueN = Engine.commitments(state).overdue.length;
+  const discN = Engine.integrity(state).counts.discrepancy;
   $('#nav').innerHTML = Object.entries(VIEWS).map(([k, v]) =>
-    `${v.group ? `<div class="nav-group">${v.group}</div>` : ''}<a href="#/${k}" class="${k === r ? 'active' : ''}"><span class="nav-icon" aria-hidden="true">${v.icon}</span>${v.label}${k === 'risks' && Engine.pendingDecisions(state).length ? `<span class="badge">${Engine.pendingDecisions(state).length}</span>` : ''}${k === 'review' && overdueN ? `<span class="badge">${overdueN}</span>` : ''}</a>`).join('');
+    `${v.group ? `<div class="nav-group">${v.group}</div>` : ''}<a href="#/${k}" class="${k === r ? 'active' : ''}"><span class="nav-icon" aria-hidden="true">${v.icon}</span>${v.label}${k === 'risks' && Engine.pendingDecisions(state).length ? `<span class="badge">${Engine.pendingDecisions(state).length}</span>` : ''}${k === 'review' && overdueN ? `<span class="badge">${overdueN}</span>` : ''}${k === 'metrics' && discN ? `<span class="badge">${discN}</span>` : ''}</a>`).join('');
+  const ps = $('#profile'); if (ps) ps.innerHTML = Object.entries(PROFILES).map(([id, p]) => `<option value="${id}" ${id === state.meta.profile ? 'selected' : ''}>Demo: ${esc(p.label)}</option>`).join('');
   $('#company').textContent = state.meta.company;
   $('#qpill').innerHTML = `${esc(q.label)} · Week ${Engine.week(state)} of ${Engine.totalWeeks(state)}`;
   $('#asof').textContent = 'Data as of ' + U.date(state.meta.asOf, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -165,7 +177,7 @@ function viewOverview() {
 
   const attention = P.attention.slice(0, 5).map((x) => `
     <button class="attn" data-action="kr" data-id="${x.kr.id}">
-      <div class="attn-top">${pill(x.h.status)}<span class="muted small">${x.h.exposure ? `<b class="money">${fmtK(x.h.exposure)} at risk</b> · ` : ''}${esc(U.krTeam(state, x.kr).name)}</span></div>
+      <div class="attn-top">${pill(x.h.status)}<span class="muted small">${x.h.exposure ? `<b class="money">${fmtK(x.h.exposure)} at risk</b> · ` : ''}${esc(U.workTeam(state, x.kr).name)}</span></div>
       <div class="attn-title">${esc(x.kr.title)}</div>
       <div class="attn-why">${esc(x.h.reasons.join(' · ') || 'Behind pace')}</div>
       ${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? `<div class="attn-next"><span aria-hidden="true">→</span> ${esc(sg.title)}</div>` : ''; })()}
@@ -176,7 +188,7 @@ function viewOverview() {
     <div class="decision">
       <div><div class="decision-title">${esc(d.decision)}</div>
       <div class="muted small">Waiting ${d.age} days · decider ${esc(U.person(state, d.decisionOwner).name)} · unblocks <a href="#" data-action="kr" data-id="${d.kr}">${esc(d.kr)}</a></div></div>
-      <button class="btn sm" data-action="decide" data-id="${d.id}">Mark decided</button>
+      <button class="btn sm" data-action="decide" data-id="${d.id}">Record decision</button>
     </div>`).join('') || '<p class="muted">No decisions waiting. Nice.</p>';
   const recentDec = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3)
     .map((d) => `<li><span class="muted small">${U.date(d.date)}</span> ${esc(d.title)}</li>`).join('');
@@ -254,7 +266,7 @@ function viewOkrs() {
     const last = Engine.lastCheckin(k);
     return `<button class="krrow" data-action="kr" data-id="${k.id}">
       <div class="kr-main"><div class="kr-title"><span class="kid-id">${k.id}</span>${esc(k.title)}</div>
-        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(() => { const n = (state.commitments || []).filter((c) => c.kr === k.id && c.status === 'open').length; return n ? `<span class="tag good">${n} open action${n > 1 ? 's' : ''}</span>` : ''; })()}${h.exposure ? `<span class="money small">${fmtK(h.exposure)} at risk</span>` : ''}</div></div>
+        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(() => { const n = (state.commitments || []).filter((c) => c.kr === k.id && c.status === 'open').length; return n ? `<span class="tag good">${n} open action${n > 1 ? 's' : ''}</span>` : ''; })()}${h.metric && h.metric.status === 'discrepancy' ? '<span class="tag bad">⚠ Sources disagree</span>' : ''}${h.exposure ? `<span class="money small">${fmtK(h.exposure)} at risk</span>` : ''}</div></div>
       <div class="kr-prog">${progressBar(h.progress, h.expected, h.status)}<div class="kr-vals"><b>${U.fmt(k, h.value)}</b> <span class="muted">of ${U.fmt(k, k.target)}</span></div></div>
       <div class="kr-conf">${confChip(h)}</div>
       <div class="kr-spark">${sparkline(k)}</div>
@@ -297,8 +309,12 @@ function viewOkrs() {
 }
 
 /* ---- Check-in ---- */
-let checkinPerson = 'lc';
+let checkinPerson = null;
 function viewCheckin() {
+  if (!checkinPerson || !state.krs.some((k) => k.owner === checkinPerson)) {
+    const counts = {}; state.krs.forEach((k) => { counts[k.owner] = (counts[k.owner] || 0) + 1; });
+    checkinPerson = (Engine.portfolio(state).attention[0] || { kr: state.krs[0] }).kr.owner;
+  }
   const P = Engine.portfolio(state);
   const mine = state.krs.filter((k) => k.owner === checkinPerson);
   const p = U.person(state, checkinPerson);
@@ -359,14 +375,15 @@ function viewRisks() {
       <td>${avatar(state, r.owner, 'sm')} <span class="small">${esc(U.person(state, r.owner).name)}</span></td>
       <td class="num">${age}d</td>
       <td><select data-action="risk-status" data-id="${r.id}">${['open', 'mitigating', 'closed'].map((s) => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
-        ${r.decision && !r.decided && r.status !== 'closed' ? `<button class="btn sm" data-action="decide" data-id="${r.id}">Mark decided</button>` : ''}</td>
+        ${r.decision && !r.decided && r.status !== 'closed' ? `<button class="btn sm" data-action="decide" data-id="${r.id}">Record decision</button>` : ''}</td>
     </tr>`;
   }).join('');
   const open = state.risks.filter((r) => r.status !== 'closed');
-  const decisions = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((d) => `<li><span class="muted small">${U.date(d.date)}</span> <b>${esc(d.title)}</b> <span class="muted small">— ${esc(U.person(state, d.owner).name)}${d.kr ? ' · ' + d.kr : ''}</span></li>`).join('');
+  const decisions = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((d) => `<li><span class="muted small">${U.date(d.date)}</span> <b>${esc(d.title)}</b> <span class="muted small">— ${esc(U.person(state, d.owner).name)}${d.kr ? ' · ' + d.kr : ''}${d.requested ? ' · decided in ' + Engine.daysBetween(d.requested, d.date) + 'd' : ''}</span>${d.rationale ? `<div class="muted small">Why: ${esc(d.rationale)}</div>` : ''}</li>`).join('');
   return `
   <header class="page-h"><div><h1>Risks, blockers & decisions</h1><p class="muted">Every blocker is tied to the key result it threatens, has an owner and a mitigation, and says plainly when an executive decision is the unblock.</p></div>
-  <button class="btn primary" data-action="new-risk">+ Log a blocker</button></header>
+  <div class="row"><button class="btn" data-action="request-decision">+ Request a decision</button><button class="btn primary" data-action="new-risk">+ Log a blocker</button></div></header>
+  ${Engine.pendingDecisions(state).length ? `<section><div class="sec-h"><h2>Decisions waiting</h2><a href="#/cadence" class="small">Decision speed →</a></div><div class="dgrid">${Engine.pendingDecisions(state).map(decisionCard).join('')}</div></section>` : ''}
   <section class="kpis small4">
     <div class="kpi"><div class="kpi-label">Open</div><div class="kpi-val">${open.length}</div></div>
     <div class="kpi"><div class="kpi-label">High severity</div><div class="kpi-val">${open.filter((r) => r.severity === 'high').length}</div></div>
@@ -410,6 +427,13 @@ function briefText() {
   if (!P.decisions.length) L.push('• None.');
   P.decisions.forEach((d) => L.push(`• ${d.decision} — decider: ${U.person(state, d.decisionOwner).name}, waiting ${d.age} days. Proposed: ${d.mitigation}`));
   L.push('');
+  const I = Engine.integrity(state);
+  const disc = I.rows.filter((r) => r.mh.status === 'discrepancy');
+  if (disc.length) {
+    L.push('NUMBERS TO RECONCILE');
+    disc.forEach((r) => L.push(`• ${r.kr.title}: ${r.mh.metric.sources.map((x) => x.system + ' ' + U.fmt(r.kr, x.value)).join(' vs ')} — ${Math.round(r.mh.spread)}% apart`));
+    L.push('');
+  }
   if (P.commitments.overdue.length) {
     L.push('OVERDUE COMMITMENTS');
     P.commitments.overdue.forEach((c) => L.push(`• ${c.text} — ${U.person(state, c.owner).name}, due ${U.date(c.due)}`));
@@ -429,16 +453,7 @@ function briefText() {
   return L.join('\n');
 }
 function viewBrief() {
-  const txt = briefText();
-  const html = txt.split('\n').map((l) => {
-    const head = l.split(' (')[0];
-    if (head.length > 3 && /^[A-Z]/.test(head) && !/[a-z]/.test(head)) return `<h3>${esc(l)}</h3>`;
-    if (l.startsWith('VALUE AT RISK:')) return `<p class="small"><b>Value at risk:</b> ${esc(l.replace('VALUE AT RISK: ', ''))}</p>`;
-    if (l.startsWith('HEADLINE:')) return `<p class="headline">${esc(l.replace('HEADLINE: ', ''))}</p>`;
-    if (l.startsWith('•')) return `<li>${esc(l.slice(2))}</li>`;
-    if (l.startsWith('   ↳')) return `<div class="sub">${esc(l.trim())}</div>`;
-    return l ? `<p>${esc(l)}</p>` : '';
-  }).join('').replace(/(<li>.*?<\/li>)+/g, (m) => `<ul>${m}</ul>`);
+  const html = memoHtml(briefText());
   return `
   <header class="page-h"><div><h1>Weekly exec brief</h1><p class="muted">Written automatically from this week's check-ins. Send it before the weekly business review so the meeting is spent on decisions, not status.</p></div>
   <div class="row"><button class="btn" data-action="copy-brief">Copy text</button><button class="btn" data-action="print">Print / PDF</button></div></header>
@@ -502,6 +517,10 @@ function viewMethod() {
       <p>Status severity, plus weight for stale data, a confidence drop of 2+ points in a week, and open high-severity blockers. The ranking is designed to show an executive the three things worth their time, not everything that is imperfect.</p>
     </div>
     <div class="card prose">
+      <h2>Operating cadence & decisions</h2>
+      <p>The leadership meetings are designed as one system: weekly exec staff makes decisions, the weekly business review covers only what is off track, the monthly business review certifies the numbers and resourcing, the quarterly review scores the quarter and sets the next, and the offsite sets strategy. Each meeting's pre-read is generated from live data. Every decision request carries context, options, a recommendation, a decider and a needed-by date; recording a decision captures what was chosen and why. Decision speed (median days to decide, share within 7 days) is tracked like any other metric.</p>
+      <h2>Metric definitions</h2>
+      <p>Every number on the scorecard has a written definition, a source system, an owner, a refresh rate and a last-verified date. A number is <b>trusted</b> when it is defined, verified within its window (7 days for daily metrics, 14 for weekly, 45 for monthly) and every source reporting it agrees within tolerance. When sources disagree, the key result is flagged and the first suggested action is to reconcile before acting.</p>
       <h2>Value at risk</h2>
       <p>Each key result carries a rough value at stake — what fully hitting it is worth, and how that was sized. Value at risk = value at stake × the share of the target we are projected to miss at today's pace, counted only for key results that are at risk or off track. It turns "25 points behind" into a number an executive can weigh, and it feeds the attention ranking.</p>
       <h2>Commitments & follow-through</h2>
@@ -579,6 +598,7 @@ function openKr(id) {
       <div class="row gap"><button class="btn primary" data-action="quick-checkin" data-id="${k.id}">Check in</button><button class="btn" data-action="new-risk" data-kr="${k.id}">Log blocker</button><button class="btn" data-action="ask" data-q="Why is ${esc(k.id)} ${h.status === 'on' ? 'on track' : 'behind'}?">Ask about this</button><button class="btn ghost" data-action="edit-kr" data-id="${k.id}">Edit</button></div>
       ${suggestionsHtml(k)}
       ${planHtml(k)}
+      ${metricHtml(k)}
       ${leadsHtml(k)}
       ${depsHtml(k)}
       ${initsHtml(k)}
@@ -766,12 +786,13 @@ document.addEventListener('click', (e) => {
     case 'dismiss-since': saveVisit(); sinceSnap = null; render(); break;
     case 'new-init': newInitiative(); break;
     case 'new-dep': newDependency(); break;
-    case 'decide': {
-      const r = state.risks.find((x) => x.id === id);
-      r.decided = true; r.status = 'mitigating';
-      state.decisions.push({ id: U.uid('D'), date: state.meta.asOf, title: r.decision, owner: r.decisionOwner, status: 'made', kr: r.kr });
-      commit('Decision logged'); break;
-    }
+    case 'decide': closeDrawer(); recordDecision(id); break;
+    case 'request-decision': requestDecision(); break;
+    case 'preread': openPreread(id); break;
+    case 'copy-preread': { const m = state.cadence.find((x) => x.id === id); navigator.clipboard?.writeText(prereadText(m.preread)).then(() => toast('Pre-read copied'), () => toast('Copy not available here')); break; }
+    case 'edit-metric': closeDrawer(); editMetric(id); break;
+    case 'resolve-metric': closeDrawer(); resolveMetric(id); break;
+    case 'verify-metric': { const m = state.metrics.find((x) => x.kr === id); m.lastVerified = state.meta.asOf; commit('Marked verified'); if (document.body.classList.contains('drawer-open')) openKr(id); break; }
     case 'new-obj': editObjective(); break;
     case 'edit-obj': editObjective(id); break;
     case 'new-kr': editKr(null, id); break;
@@ -788,7 +809,7 @@ document.addEventListener('click', (e) => {
       const url = URL.createObjectURL(blob); const l = document.createElement('a');
       l.href = url; l.download = 'okr-data.json'; l.click(); URL.revokeObjectURL(url); break;
     }
-    case 'reset': state = buildDemo(); askThread = []; try { localStorage.removeItem(VISIT_KEY); } catch (e) {} loadSince(); closeModal(); commit('Demo data restored'); break;
+    case 'reset': state = buildDemo(state.meta.profile); askThread = []; try { localStorage.removeItem(visitKey()); } catch (e) {} loadSince(); closeModal(); commit('Demo data restored'); break;
     case 'menu': document.body.classList.toggle('nav-open'); break;
   }
 });
@@ -796,6 +817,7 @@ document.addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.action === 'toggle-action') { const c = state.commitments.find((x) => x.id === t.dataset.id); c.status = t.checked ? 'done' : 'open'; commit(t.checked ? 'Marked done' : 'Reopened'); openKr(t.dataset.kr); return; }
   if (t.dataset.action === 'checkin-person') { checkinPerson = t.value; render(); }
+  if (t.id === 'profile') { switchProfile(t.value); return; }
   if (t.dataset.action === 'risk-status') { const r = state.risks.find((x) => x.id === t.dataset.id); r.status = t.value; commit('Status updated'); }
   if (t.dataset.filter && t.tagName === 'SELECT') { okrFilter[t.dataset.filter] = t.value; render(); }
   if (t.dataset.action === 'import' && t.files[0]) {

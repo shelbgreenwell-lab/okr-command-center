@@ -8,14 +8,17 @@ const STOP = new Set('a an the is are was were be of to in on for and or with wh
 
 const SYNONYMS = {
   revenue: ['bookings', 'retention', 'revenue', 'pipeline'],
-  growth: ['bookings', 'pipeline', 'retention', 'revenue'],
+  growth: ['bookings', 'pipeline', 'revenue', 'active users', 'referral'],
   sales: ['pipeline', 'win', 'cycle', 'bookings'],
   money: ['margin', 'bookings', 'revenue'], profit: ['margin', 'profitability'], profitability: ['margin', 'p&l', 'profitability'],
   margin: ['margin', 'p&l'], finance: ['margin', 'forecast', 'p&l'],
+  acquisition: ['acquisition', 'payback', 'referral'], cac: ['acquisition cost'], ltv: ['lifetime value'],
+  crash: ['crash'], crashes: ['crash'], app: ['app', 'crash', 'rating'], rating: ['rating'], reliability: ['crash', 'start time', 'bugs'],
+  activation: ['first-week', 'onboarding'], engagement: ['weekly-to-monthly', 'active'], data: ['metrics', 'discrepanc', 'certified'],
   customers: ['churn', 'promoter', 'time-to-value', 'success', 'support', 'retention'], customer: ['churn', 'promoter', 'success', 'support'],
   churn: ['churn', 'at-risk', 'retention'], loyalty: ['churn', 'promoter', 'retention'], nps: ['promoter'],
   people: ['attrition', 'leadership', 'leaders'], talent: ['attrition', 'leadership', 'internally'],
-  hiring: ['internally', 'leadership'], retention: ['attrition', 'retention'], attrition: ['attrition'],
+  hiring: ['internally', 'leadership'], retention: ['retention', 'churn'], attrition: ['attrition'],
   tech: ['roadmap', 'bugs'], technology: ['roadmap', 'bugs'], engineering: ['roadmap', 'bugs'], product: ['roadmap', 'bugs'],
   bugs: ['bugs'], quality: ['bugs', 'promoter'], roadmap: ['roadmap'], shipping: ['roadmap'],
   operations: ['processes', 'tools', 'friction'], process: ['processes'], tools: ['tools', 'software'],
@@ -23,6 +26,9 @@ const SYNONYMS = {
 };
 
 const INTENTS = [
+  { id: 'metrics', re: /trust (the|our|these) (numbers|data|metrics)|numbers can we trust|which numbers|metric definition|definition of|defined|source of truth|data quality|discrepanc|reconcil|sources disagree|how (is|are) .* measured/ },
+  { id: 'cadence', re: /meeting|cadence|calendar|pre.?read|qbr|offsite|business review|staff meeting|coming up/ },
+  { id: 'velocity', re: /how (fast|quickly|long).*decid|decision (speed|velocity)|time to decide|slow to decide/ },
   { id: 'since', re: /since (i|my) last|what'?s new|catch me up|did i miss/ },
   { id: 'money', re: /\$|dollar|value (is )?at risk|how much .*(at risk|at stake)|exposure|cost us|at stake|how much (money|revenue|is)|financial impact|worth/ },
   { id: 'commitments', re: /commit|follow.?through|overdue|promised|said (they|he|she) would|action items?|accountab/ },
@@ -43,22 +49,9 @@ const INTENTS = [
 ];
 
 const Ask = {
-  suggestions: [
-    'What needs my attention this week?',
-    'Which decisions are waiting on me?',
-    'Why is critical bug resolution off track?',
-    'Will we hit our Q4 bookings target?',
-    'What changed since last week?',
-    'Who hasn\'t checked in?',
-    'How do we get bookings back on track?',
-    'How much value is at risk?',
-    'What commitments are overdue?',
-    'Who is waiting on another team?',
-    'Where are our people and budget going?',
-    'Are our targets too safe or too ambitious?',
-    'How is Operations doing?',
-    'What is blocking customer success?',
-  ],
+  get suggestions() {
+    return (typeof state !== 'undefined' && state && state.meta.suggestions) || ['What needs my attention this week?', 'Which decisions are waiting on me?', 'What changed since last week?', 'Which numbers can we trust?'];
+  },
 
   hasClaude() { try { return !!localStorage.getItem('okr-claude-key'); } catch (e) { return false; } },
 
@@ -85,6 +78,24 @@ const Ask = {
     const items = (list) => list.map((k) => k.id);
     const label = scope.label;
     const out = (text, ids = [], follow = []) => ({ text, items: ids, followups: follow, source: 'local' });
+
+    if (intents[0] === 'metrics' || (intents.includes('metrics') && !scope.krs)) {
+      const I = Engine.integrity(state);
+      let rows = I.rows; if (scope.krs) rows = rows.filter((r) => scope.krs.includes(r.kr));
+      const bad = rows.filter((r) => r.mh.status !== 'trusted');
+      const desc = (r) => r.mh.status === 'discrepancy' ? `${r.mh.metric.sources.map((x) => x.system + ' says ' + U.fmt(r.kr, x.value)).join(', ')} (${Math.round(r.mh.spread)}% apart). ${r.mh.metric.note}` : r.mh.status === 'unverified' ? `last verified ${r.mh.age} days ago in ${r.mh.metric.source}` : 'no agreed definition';
+      return out(`**${rows.length - bad.length} of ${rows.length} numbers${label ? ' in ' + label : ''} are trusted** — defined, recently verified, and every source agrees.${bad.length ? '\n\nTreat these with care:\n' + bad.sort((a, b) => (a.mh.status === 'discrepancy' ? -1 : 1)).map((r) => `- **${r.kr.title}** — ${r.mh.label.toLowerCase()}: ${desc(r)}`).join('\n') : ''}`, items(bad.map((r) => r.kr)), ['What meetings are coming up?']);
+    }
+
+    if (intents[0] === 'velocity' || (intents.includes('velocity') && !intents.includes('decisions'))) {
+      const V = Engine.decisionVelocity(state);
+      return out(`**Decisions take a median of ${V.median ?? '—'} days** from request to decision; ${V.within7 != null ? U.pct(V.within7) : '—'} were made within 7 days this quarter. ${V.waiting.length} are waiting now, the oldest for ${V.oldest} days${V.overdue.length ? `, and ${V.overdue.length} are past their needed-by date` : ''}.`, items(V.waiting.map((d) => state.krs.find((k) => k.id === d.kr)).filter(Boolean)), ['Which decisions are waiting on me?']);
+    }
+
+    if (intents[0] === 'cadence') {
+      const up = Engine.meetingsBetween(state, state.meta.asOf, 21);
+      return out(`**Next three weeks:**\n${up.map((x) => `- **${U.date(x.date, { weekday: 'short', month: 'short', day: 'numeric' })}** — ${x.m.name}: ${x.m.purpose}`).join('\n')}\n\nEvery meeting's pre-read is generated on the Operating cadence page.`, [], ['Which decisions are waiting on me?']);
+    }
 
     if (intents[0] === 'since') {
       const snap = typeof sinceSnap !== 'undefined' && sinceSnap ? sinceSnap : Engine.lastWeekSnapshot(state);
@@ -207,11 +218,16 @@ const Ask = {
     // Blockers
     if (intents.includes('blockers') && !intents.includes('status') || (intents.includes('blockers') && /block|stuck/.test(q))) {
       let rs = state.risks.filter((r) => r.status !== 'closed');
-      if (scope.krs) rs = rs.filter((r) => scope.krs.some((k) => k.id === r.kr));
+      if (scope.krs) {
+        // include blockers on the work these key results depend on
+        const ids = new Set(scope.krs.map((k) => k.id));
+        (state.deps || []).forEach((d) => { if (ids.has(d.kr) && d.onKr && !d.delivered) ids.add(d.onKr); });
+        rs = rs.filter((r) => ids.has(r.kr));
+      }
       const sev = { high: 0, medium: 1, low: 2 };
       rs.sort((a, b) => sev[a.severity] - sev[b.severity]);
       if (!rs.length) return out(`No open blockers${label ? ' on ' + label : ''}.`);
-      const lines = rs.slice(0, 6).map((r) => `- **${r.title}** (${r.severity}) — ${r.impact} Owner: ${U.person(state, r.owner).name}.${r.decision ? ' Needs decision: ' + r.decision + '.' : ''}`);
+      const lines = rs.slice(0, 6).map((r) => `- **${r.title}** (${r.severity}) — ${r.impact} Owner: ${U.person(state, r.owner).name}.${r.decision && !r.decided ? ' Needs decision: ' + r.decision + '.' : ''}${scope.krs && !scope.krs.some((k) => k.id === r.kr) ? ' (upstream: ' + r.kr + ')' : ''}`);
       const theme = Ask.theme(rs);
       return out(`**${rs.length} open blocker${rs.length > 1 ? 's' : ''}${label ? ' on ' + label : ''}.**${theme ? ' ' + theme : ''}\n${lines.join('\n')}`, [...new Set(rs.map((r) => r.kr))], ['Which decisions are waiting on me?']);
     }
@@ -242,7 +258,7 @@ const Ask = {
     const top = P.attention.slice(0, 3);
     const pace = P.progress - P.expected;
     let t = `**Week ${Engine.week(state)} of ${Engine.totalWeeks(state)}: ${U.pct(P.progress)} complete vs ${U.pct(P.expected)} expected** — ${pace >= -0.05 ? 'broadly on pace' : pace >= -0.15 ? 'slightly behind pace' : 'meaningfully behind pace'}. ${P.counts.on} on track, ${P.counts.risk} at risk, ${P.counts.off} off track.\n\nWhere to focus:\n`;
-    t += top.map((x, i) => `- **${i + 1}. ${x.kr.title}** (${U.krTeam(state, x.kr).name}) — ${x.h.reasons.join(', ')}.`).join('\n');
+    t += top.map((x, i) => `- **${i + 1}. ${x.kr.title}** (${U.workTeam(state, x.kr).name}) — ${x.h.reasons.join(', ')}.`).join('\n');
     if (P.decisions.length) t += `\n\n**${P.decisions.length} decision${P.decisions.length > 1 ? 's' : ''} waiting on executives**, oldest at ${P.decisions[0].age} days: ${P.decisions[0].decision.toLowerCase()}.`;
     if (P.stale.length) t += `\n\n${P.stale.length} key result${P.stale.length > 1 ? 's have' : ' has'} no check-in in over ${STALE_DAYS} days.`;
     return t;
@@ -310,10 +326,10 @@ const Ask = {
       }
     }
     // Topic match against KR titles
-    let tokens = q.replace(/[^a-z0-9&\- ]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w) && w.length > 2);
+    let tokens = q.replace(/[^a-z0-9&\- ]/g, ' ').split(/\s+/).flatMap((w) => w.includes('-') ? [w, ...w.split('-')] : [w]).filter((w) => w && !STOP.has(w) && w.length > 2);
     const expanded = new Set(tokens);
     tokens.forEach((w) => (SYNONYMS[w] || []).forEach((s) => expanded.add(s)));
-    const generic = new Set(['week', 'track', 'risk', 'needs', 'attention', 'quarter', 'target', 'hit', 'changed', 'since', 'last', 'blocking', 'blocked', 'decisions', 'waiting', 'off', 'behind', 'doing', 'going', 'status', 'okrs', 'okr', 'results', 'key', 'objectives', 'checked', 'check', 'hasn', 'update', 'drop', 'confidence', 'wins', 'win', 'customer', 'customers', 'attention', 'value', 'much', 'money', 'overdue', 'commitment', 'commitments', 'committed', 'another', 'team', 'teams', 'other', 'people', 'budget', 'going', 'targets', 'safe', 'ambitious', 'initiatives', 'dependencies', 'following', 'follow', 'through', 'since', 'looked', 'stake', 'worth', 'cost', 'working', 'doing', 'how', 'are']);
+    const generic = new Set(['week', 'track', 'risk', 'needs', 'attention', 'quarter', 'target', 'hit', 'changed', 'since', 'last', 'blocking', 'blocked', 'decisions', 'waiting', 'off', 'behind', 'doing', 'going', 'status', 'okrs', 'okr', 'results', 'key', 'objectives', 'checked', 'check', 'hasn', 'update', 'drop', 'confidence', 'wins', 'win', 'customer', 'customers', 'attention', 'user', 'users', 'number', 'numbers', 'trust', 'trusted', 'meetings', 'meeting', 'coming', 'value', 'much', 'money', 'overdue', 'commitment', 'commitments', 'committed', 'another', 'team', 'teams', 'other', 'people', 'budget', 'going', 'targets', 'safe', 'ambitious', 'initiatives', 'dependencies', 'following', 'follow', 'through', 'since', 'looked', 'stake', 'worth', 'cost', 'working', 'doing', 'how', 'are']);
     const scored = state.krs.map((k) => {
       const hay = (k.title + ' ' + U.obj(state, k.obj).title).toLowerCase();
       let s = 0;

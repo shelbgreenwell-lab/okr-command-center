@@ -73,6 +73,8 @@ const Engine = {
     if (confDelta <= -2) reasons.push(`confidence fell ${-confDelta} pts`);
     if (stale) reasons.push(`no check-in for ${daysSince} days`);
     if (openRisks.some((r) => r.severity === 'high')) reasons.push('high-severity blocker open');
+    const mh = noDeps ? null : Engine.metricHealth(state, kr);
+    if (mh && mh.status === 'discrepancy') reasons.push('data sources disagree');
     if (upstream.length) reasons.push(`waiting on ${upstream.map((d) => d.onKr || U.team(state, d.fromTeam).name).join(', ')}`);
 
     const attention = level * 3 + (stale ? 2 : 0) + (confDelta <= -2 ? 1 : 0)
@@ -80,7 +82,7 @@ const Engine = {
       + Math.min(3, exposure / 300) + upstream.length * 0.5;
 
     return { value, progress, prevProgress, delta: progress - prevProgress, confidence, confDelta,
-      expected: e, gap, status, stale, daysSince, projected, projectedValue, openRisks, reasons, attention, exposure, upstream };
+      expected: e, gap, status, stale, daysSince, projected, projectedValue, openRisks, reasons, attention, exposure, upstream, metric: mh };
   },
 
   objective(state, obj) {
@@ -144,6 +146,63 @@ const Engine = {
     return { objs, krs, hs, progress, counts };
   },
 
+  /* ---- Metric integrity ---- */
+  VERIFY_WINDOW: { daily: 7, weekly: 14, monthly: 45 },
+  metricHealth(state, kr) {
+    const m = (state.metrics || []).find((x) => x.kr === kr.id);
+    if (!m) return { status: 'undefined', label: 'No definition', metric: null };
+    const vals = (m.sources || []).map((s) => +s.value);
+    let spread = 0;
+    if (vals.length > 1) { const mean = vals.reduce((a, v) => a + v, 0) / vals.length; spread = mean ? (Math.max(...vals) - Math.min(...vals)) / Math.abs(mean) * 100 : 0; }
+    const age = Engine.daysBetween(m.lastVerified, state.meta.asOf);
+    const window = Engine.VERIFY_WINDOW[m.refresh] || 14;
+    if (vals.length > 1 && spread > m.tolerance) return { status: 'discrepancy', label: 'Sources disagree', metric: m, spread, age };
+    if (age > window) return { status: 'unverified', label: 'Not verified recently', metric: m, spread, age };
+    return { status: 'trusted', label: 'Trusted', metric: m, spread, age };
+  },
+  integrity(state) {
+    const rows = state.krs.map((k) => ({ kr: k, mh: Engine.metricHealth(state, k) }));
+    const c = { trusted: 0, discrepancy: 0, unverified: 0, undefined: 0 };
+    rows.forEach((r) => c[r.mh.status]++);
+    return { rows, counts: c };
+  },
+
+  /* ---- Decision speed ---- */
+  decisionVelocity(state) {
+    const made = (state.decisions || []).filter((d) => d.requested && d.date).map((d) => Engine.daysBetween(d.requested, d.date)).sort((a, b) => a - b);
+    const median = made.length ? (made.length % 2 ? made[(made.length - 1) / 2] : (made[made.length / 2 - 1] + made[made.length / 2]) / 2) : null;
+    const within7 = made.length ? made.filter((x) => x <= 7).length / made.length : null;
+    const waiting = Engine.pendingDecisions(state);
+    const overdue = waiting.filter((d) => d.neededBy && d.neededBy < state.meta.asOf);
+    return { made: made.length, median, within7, waiting, overdue, oldest: waiting[0] ? waiting[0].age : 0 };
+  },
+
+  /* ---- Meeting cadence ---- */
+  nextMeeting(state, m) {
+    const today = Engine.d(state.meta.asOf);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    if (m.freq === 'weekly') { const d = new Date(today); while (d.getDay() !== m.weekday) d.setDate(d.getDate() + 1); return iso(d); }
+    if (m.freq === 'monthly') {
+      for (let k = 0; k < 3; k++) {
+        const d = new Date(today.getFullYear(), today.getMonth() + k, 1, 12);
+        while (d.getDay() !== m.weekday) d.setDate(d.getDate() + 1);
+        if (d >= today) return iso(d);
+      }
+    }
+    if (m.freq === 'quarterly') { const q = Engine.quarter(state); const d = Engine.d(q.end); d.setDate(d.getDate() - 14); while (d.getDay() !== 4) d.setDate(d.getDate() - 1); return iso(d); }
+    return m.date;
+  },
+  meetingsBetween(state, from, days) {
+    const out = [];
+    const start = Engine.d(from), end = new Date(start.getTime() + days * DAY);
+    (state.cadence || []).forEach((m) => {
+      if (m.freq === 'weekly') { const d = Engine.d(Engine.nextMeeting(state, m)); for (; d <= end; d.setDate(d.getDate() + 7)) out.push({ m, date: d.toISOString().slice(0, 10) }); }
+      else if (m.freq === 'monthly') { for (let k = 0; k < 3; k++) { const d = new Date(start.getFullYear(), start.getMonth() + k, 1, 12); while (d.getDay() !== m.weekday) d.setDate(d.getDate() + 1); if (d >= start && d <= end) out.push({ m, date: d.toISOString().slice(0, 10) }); } }
+      else { const nd = Engine.nextMeeting(state, m); if (nd && Engine.d(nd) <= end) out.push({ m, date: nd }); }
+    });
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  },
+
   /* ---- Dependencies ---- */
   depsFor(state, krId) {
     return (state.deps || []).filter((d) => d.kr === krId).map((d) => Engine.dep(state, d));
@@ -198,6 +257,7 @@ const Engine = {
   calibration(scores) {
     const v = scores.filter((x) => x != null);
     const avg = v.reduce((a, x) => a + x, 0) / (v.length || 1);
+    if (v.length >= 3 && v.every((x, i) => i === 0 || x < v[i - 1]) && v[0] - v[v.length - 1] >= 0.08) return { avg, label: 'Declining every quarter', tone: 'bad' };
     if (avg >= 0.9) return { avg, label: 'Targets may be too safe', tone: 'warn' };
     if (avg >= 0.6) return { avg, label: 'Healthy stretch', tone: 'good' };
     if (avg >= 0.5) return { avg, label: 'Slightly over-ambitious', tone: 'warn' };

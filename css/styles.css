@@ -433,3 +433,34 @@ tr.unaligned td { background: color-mix(in srgb, var(--warn) 7%, transparent); }
 @media (max-width: 1180px) { .kpis.k4 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 900px) { .board-cols, .leads { grid-template-columns: 1fr; } .crow { flex-direction: column; align-items: flex-start; } .rrow { grid-template-columns: 1fr 60px; } .rrow .rbar-wrap { grid-column: 1 / -1; grid-row: 2; } }
 @media print { .noprint-row .row { display: none; } .board { border: 0; padding: 0; } }
+
+/* ---- v6 additions ---- */
+.profile-sel { margin-left: auto; width: auto; font-weight: 600; font-size: 12.5px; padding: 5px 10px; border-radius: 999px; }
+.row.gap0 { gap: 8px; flex-wrap: wrap; }
+.mt4 { margin-top: 6px; }
+.wkstrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.wk { background: var(--surface-2); border-radius: 10px; padding: 10px; display: grid; gap: 6px; align-content: start; }
+.wk-h { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-2); font-weight: 650; }
+.mtg { all: unset; cursor: pointer; display: grid; gap: 1px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--series-1); border-radius: 7px; padding: 6px 8px; font-size: 12.5px; }
+.mtg span { color: var(--text-2); font-size: 11.5px; }
+.mtg:hover { border-color: var(--accent); }
+.mtg-monthly { border-left-color: #1baf7a; } .mtg-quarterly { border-left-color: #eb6834; } .mtg-semiannual { border-left-color: #6250d6; }
+.mcard { margin-bottom: 0; }
+.mdl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.mdl dt { color: var(--text-2); font-weight: 550; } .mdl dd { margin: 0; }
+.dgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.dcard { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--crit); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.dcard-h { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 6px; }
+.dcard-t { font-weight: 650; font-size: 14.5px; }
+.dcard-age { font-weight: 650; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.opts { margin: 6px 0 12px; padding-left: 20px; font-size: 13px; } .opts li { margin-bottom: 3px; } .opts li.rec { font-weight: 600; }
+.mbox { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.mbox.mh-discrepancy { border-color: color-mix(in srgb, var(--crit) 45%, var(--border)); background: color-mix(in srgb, var(--crit) 5%, var(--surface)); }
+.mbox p { margin: 6px 0 2px; }
+table.metrics td { font-size: 12.5px; }
+tr.mh-discrepancy td { background: color-mix(in srgb, var(--crit) 5%, transparent); }
+.modal-card.wide { width: min(820px, 100%); }
+.memo.inmodal { padding: 16px 24px; }
+.memo.inmodal p:first-child { font-size: 18px; }
+.kpi-val small { font-size: 15px; font-weight: 500; }
+@media (max-width: 900px) { .dgrid { grid-template-columns: 1fr; } .mdl { grid-template-columns: 1fr; } .profile-sel { max-width: 150px; } .topbar #asof { display: none; } }

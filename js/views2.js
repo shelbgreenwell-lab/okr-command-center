@@ -2,13 +2,14 @@
    dependencies, quarter history, and the board one-pager. Shared drawer pieces too. */
 
 /* ---------------- Since you last looked ---------------- */
-const VISIT_KEY = 'okr-last-visit-v4';
+const VISIT_KEY = 'okr-last-visit-v6';
 let sinceSnap = null;
+const visitKey = () => VISIT_KEY + '-' + (state.meta.profile || 'b2b');
 function loadSince() {
-  try { const s = localStorage.getItem(VISIT_KEY); if (s) { sinceSnap = JSON.parse(s); return; } } catch (e) {}
+  try { const s = localStorage.getItem(visitKey()); if (s) { sinceSnap = JSON.parse(s); return; } } catch (e) {}
   sinceSnap = Engine.lastWeekSnapshot(state);
 }
-function saveVisit() { try { localStorage.setItem(VISIT_KEY, JSON.stringify(Engine.snapshot(state))); } catch (e) {} }
+function saveVisit() { try { localStorage.setItem(visitKey(), JSON.stringify(Engine.snapshot(state))); } catch (e) {} }
 function sinceBanner() {
   if (!sinceSnap) return '';
   const d = Engine.diff(state, sinceSnap);
@@ -228,7 +229,9 @@ function viewBoard() {
         <li>Commitment follow-through: <b>${U.pct(P.commitments.rate)}</b> (${P.commitments.overdue.length} overdue)</li>
         <li>Exec decisions waiting: <b>${P.decisions.length}</b>${P.decisions.length ? `, oldest ${P.decisions[0].age} days` : ''}</li>
         <li>People on work tied to no objective: <b>${U.pct(R.unaligned.fte / R.totalFte)}</b></li>
-        <li>Key results with a current check-in: <b>${P.all.length - P.stale.length} of ${P.all.length}</b></li></ul></div>
+        <li>Key results with a current check-in: <b>${P.all.length - P.stale.length} of ${P.all.length}</b></li>
+        <li>Decision speed: <b>${Engine.decisionVelocity(state).median ?? '—'} days</b> median from request to decision</li>
+        <li>Scorecard numbers trusted: <b>${Engine.integrity(state).counts.trusted} of ${state.krs.length}</b>${Engine.integrity(state).counts.discrepancy ? ` (${Engine.integrity(state).counts.discrepancy} where sources disagree)` : ''}</li></ul></div>
     </div>
   </article>`;
 }

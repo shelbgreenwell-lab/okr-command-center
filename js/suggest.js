@@ -68,6 +68,15 @@ const Suggest = {
         `The number has barely moved in two check-ins. Ask ${first} for the single action that would move it by next week, and remove whatever is in the way.`);
     }
 
+    // 6a. The number itself is in doubt
+    if (h.metric && h.metric.status === 'discrepancy') {
+      const m = h.metric.metric;
+      add(9, 'reconcile', 'Reconcile the number before acting on it',
+        `${m.sources.map((x) => x.system + ' says ' + U.fmt(kr, x.value)).join('; ')} — ${Math.round(h.metric.spread)}% apart. ${m.note ? m.note + ' ' : ''}Agree which source is right at the next monthly business review and fix the other.`);
+    } else if (h.metric && h.metric.status === 'undefined') {
+      add(4, 'define', 'Write down how this is measured', 'There is no agreed definition or source for this number, so two people can report it differently. Define it before the next review.');
+    }
+
     // 6b. Waiting on another team
     h.upstream.slice(0, 1).forEach((d) => {
       const who = d.up ? `${U.person(state, d.up.owner).name} (${d.onKr})` : U.team(state, d.fromTeam).name;

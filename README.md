@@ -4,7 +4,7 @@
 
 **[Open the live demo →](https://shelbgreenwell-lab.github.io/okr-command-center/)** · no login, works on desktop and phone
 
-> The demo runs on a fictional company (Meridian Group, 1,400 people) six weeks into Q4. All names and numbers are invented.
+> Two fictional demo companies, switchable from the top bar: a **B2B software company** (bookings, retention, pipeline) and a **consumer app** (active users, retention, acquisition cost, lifetime value). Both are six weeks into Q4; all names and numbers are invented.
 
 ---
 
@@ -28,6 +28,9 @@ This tool treats OKRs as an **operating system**, not a document:
 | Who is waiting on whom? | **Dependencies** — cross-team asks flagged when late or when the upstream work is behind |
 | Are we good at setting goals? | **Quarter history** — past scores by team, labelled too safe / healthy stretch / over-committing |
 | What goes in the board pack? | **Board one-pager** — the quarter on one printable page |
+| Can I trust these numbers? | **Metric definitions** — every scorecard number has a definition, source, owner and last-verified date; flagged when two systems disagree |
+| Is our meeting rhythm working? | **Operating cadence** — weekly staff, weekly business review, monthly business review, QBR and offsite, each with purpose, decision rights and an auto-generated pre-read |
+| How fast do we decide? | **Decision records** — context, options, recommendation, decider and needed-by date; median time to decide tracked like any metric |
 | What do I read before the WBR? | **Weekly exec brief** — written automatically, with a time-boxed agenda |
 | Can I just ask? | **Ask** — plain-English questions answered from live data |
 
@@ -44,6 +47,9 @@ This tool treats OKRs as an **operating system**, not a document:
 - **Resources should follow priorities.** Seeing 9% of people on work tied to no goal while two objectives are at risk is the conversation this view exists to start.
 - **Leading indicators sit next to lagging ones**, so you can see inputs move before outcomes do.
 - **The overview opens with what changed since you last looked.**
+- **A number nobody can define is a number nobody should act on.** Reconciling disagreeing sources comes before any other suggested action.
+- **Meetings are a system, not a calendar.** Each one has a job, decision rights and an output, and its pre-read writes itself.
+- **Decisions are records, not outcomes.** What was decided, the options considered, who decided and why — so "why did we do that?" has an answer.
 - **The meeting writes its own agenda.** The brief proposes a 45-minute weekly business review spent on off-track items and pending decisions — not status.
 
 The exact rules are in the app under **How it works**, so anyone can audit why something is flagged.
@@ -55,12 +61,13 @@ The exact rules are in the app under **How it works**, so anyone can audit why s
 
 ## Try it in two minutes
 
-1. Open the demo and read the **Executive overview**.
+1. Open the demo and read the **Executive overview**. Switch demo companies from the top bar.
 2. In **Ask**, try *"Why is integration build time off track?"* or *"Which decisions are waiting on me?"*
 3. Click **Mark decided** on a decision, then check the badge and decision log.
-4. Open **Weekly review** and close out an overdue commitment, then check **Board one-pager**.
-5. Go to **Weekly check-in**, change a number and confidence, submit — every view updates.
-6. Open **Settings** and move the app date forward to watch pace and staleness change.
+4. Open **Operating cadence** and click a meeting to see its pre-read; open **Metric definitions** and resolve a number where sources disagree.
+5. Open **Weekly review** and close out an overdue commitment, then check **Board one-pager**.
+6. Go to **Weekly check-in**, change a number and confidence, submit — every view updates.
+7. Open **Settings** and move the app date forward to watch pace and staleness change.
 
 Edits save in your browser. *Settings → Reset to demo data* restores the original.
 
@@ -76,7 +83,9 @@ js/suggest.js     mitigation suggestions for slipping key results
 js/views2.js      weekly review, initiatives, dependencies, history, board one-pager
 js/ask.js         question answering (built-in analyst + optional Claude)
 js/app.js         views, charts, forms
-js/data.js        fictional demo company
+js/data.js        demo company 1 (B2B software) + shared demo structure
+js/data_consumer.js  demo company 2 (consumer app)
+js/views3.js      operating cadence, pre-reads, decision records, metric definitions
 ```
 
 Run locally by opening `index.html` in a browser.
