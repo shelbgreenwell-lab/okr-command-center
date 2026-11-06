@@ -21,6 +21,7 @@ This tool treats OKRs as an **operating system**, not a document:
 | What's waiting on me? | **Decisions waiting** — every exec ask has a decider and ages visibly |
 | How does team work connect to company goals? | **OKRs & alignment** — team objectives ladder to company objectives |
 | What changed and why? | **Weekly check-ins** — number, 1–10 confidence, note, blocker |
+| What do we do about it? | **Suggested actions** — each slipping key result gets concrete next steps based on *why* it's behind, one click to add to a recovery plan |
 | What do I read before the WBR? | **Weekly exec brief** — written automatically, with a time-boxed agenda |
 | Can I just ask? | **Ask** — plain-English questions answered from live data |
 
@@ -31,6 +32,7 @@ This tool treats OKRs as an **operating system**, not a document:
 - **Blockers are tied to outcomes.** Every risk names the key result it threatens, an owner, a mitigation, and whether an executive decision is the unblock.
 - **Decisions are tracked like work.** Pending decisions age on the dashboard until made, then move to a decision log.
 - **Silence is a signal.** No check-in for 8+ days marks a key result *stale*.
+- **Diagnosis drives the fix.** Suggestions come from the specific signal: a stuck decision gets a push to decide, an out-of-reach target gets a resources/scope/reset call, a confidence drop gets a conversation, silence gets a request for an update.
 - **The meeting writes its own agenda.** The brief proposes a 45-minute weekly business review spent on off-track items and pending decisions — not status.
 
 The exact rules are in the app under **How it works**, so anyone can audit why something is flagged.
@@ -58,6 +60,7 @@ Plain HTML, CSS and JavaScript — no framework, no build step, no server. Hoste
 index.html        app shell
 css/styles.css    design system (light + dark mode, responsive)
 js/engine.js      OKR math: progress, pace, status, forecast, attention ranking
+js/suggest.js     mitigation suggestions for slipping key results
 js/ask.js         question answering (built-in analyst + optional Claude)
 js/app.js         views, charts, forms
 js/data.js        fictional demo company

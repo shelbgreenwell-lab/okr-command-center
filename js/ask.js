@@ -23,6 +23,7 @@ const SYNONYMS = {
 };
 
 const INTENTS = [
+  { id: 'mitigate', re: /suggest|mitigat|what should (we|i) do|how (do|can) we (fix|recover|get)|recover|back on track|options|next steps?|action plan|what can we do/ },
   { id: 'attention', re: /attention|focus on|priorit|worry about|top (3|three|things)|what should i|most important|keep me up/ },
   { id: 'decisions', re: /decision|decide|approv|need from me|waiting on me|my call|sign.?off|unblock|what do you need/ },
   { id: 'status', re: /off.?track|at.?risk|behind|\bred\b|slipping|failing|trouble|worr|concern|lagging|miss/ },
@@ -43,6 +44,7 @@ const Ask = {
     'Will we hit our Q4 bookings target?',
     'What changed since last week?',
     'Who hasn\'t checked in?',
+    'How do we get bookings back on track?',
     'How is Operations doing?',
     'What is blocking customer success?',
   ],
@@ -72,6 +74,13 @@ const Ask = {
     const items = (list) => list.map((k) => k.id);
     const label = scope.label;
     const out = (text, ids = [], follow = []) => ({ text, items: ids, followups: follow, source: 'local' });
+
+    if (intents.includes('mitigate')) {
+      const targets = (scope.krs || P.attention.slice(0, 3).map((x) => x.kr)).filter((k) => Suggest.forKr(state, k).length).slice(0, 3);
+      if (!targets.length) return out(`Nothing${label ? ' in ' + label : ''} needs a recovery plan right now — it's all on track.`);
+      const txt = targets.map((k) => `**${k.title}** (${STATUS_LABEL[H(k).status].toLowerCase()}, ${U.person(state, k.owner).name}):\n` + Suggest.forKr(state, k).map((sg) => `- **${sg.title}.** ${sg.detail}`).join('\n')).join('\n\n');
+      return out(txt + '\n\nOpen any key result to add these to its recovery plan.', items(targets), ['Which decisions are waiting on me?']);
+    }
 
     if (intents[0] === 'attention' && !scope.krs) {
       return out(Ask.brief(state), items(P.attention.slice(0, 5).map((x) => x.kr)), ['Which decisions are waiting on me?', 'What changed since last week?', 'Who hasn\'t checked in?']);
@@ -189,6 +198,8 @@ const Ask = {
     if (h.reasons.length) t += ` Signals: ${h.reasons.join(', ')}.`;
     if (last && last.note) t += `\n\n${U.person(state, k.owner).name}'s latest update (${U.date(last.date)}): "${last.note}"`;
     if (h.openRisks.length) t += '\n\nOpen blockers:\n' + h.openRisks.map((r) => `- ${r.title} — ${r.mitigation}${r.decision && !r.decided ? ' **Needs decision: ' + r.decision + '.**' : ''}`).join('\n');
+    const sgs = Suggest.forKr(state, k);
+    if (sgs.length) t += '\n\nSuggested actions:\n' + sgs.slice(0, 3).map((sg) => `- **${sg.title}.** ${sg.detail}`).join('\n');
     t += `\n\nAt the current rate it lands near ${U.fmt(k, h.projectedValue)}. Supports "${o.title}".`;
     return t;
   },
@@ -259,6 +270,7 @@ const Ask = {
         return { id: k.id, objective: k.obj, title: k.title, owner: U.person(state, k.owner).name, start: U.fmt(k, k.start), target: U.fmt(k, k.target), current: U.fmt(k, h.value),
           progress: U.pct(h.progress), expected: U.pct(h.expected), status: STATUS_LABEL[h.status], confidence: h.confidence, confidenceChange: h.confDelta,
           daysSinceCheckin: h.daysSince, projectedEndValue: U.fmt(k, h.projectedValue), latestNote: last ? last.note : '',
+          suggestedActions: Suggest.forKr(state, k).map((sg) => sg.title + ': ' + sg.detail), recoveryPlan: (k.actions || []).map((x) => x.title + (x.done ? ' (done)' : '')),
           history: k.checkins.map((c) => c.date + ': ' + U.fmt(k, c.value) + ' conf ' + c.confidence) };
       }),
       risks: state.risks.map((r) => ({ id: r.id, kr: r.kr, title: r.title, severity: r.severity, status: r.status, owner: U.person(state, r.owner).name, raised: r.raised, impact: r.impact, mitigation: r.mitigation, decisionNeeded: r.decided ? null : r.decision || null, decisionOwner: r.decisionOwner ? U.person(state, r.decisionOwner).name : null })),
@@ -270,7 +282,7 @@ const Ask = {
   async claude(state, q) {
     const key = localStorage.getItem('okr-claude-key');
     const model = localStorage.getItem('okr-claude-model') || 'claude-sonnet-5-5';
-    const system = `You are the chief of staff to the executive team at ${state.meta.company}. You answer questions about the company's OKRs using only the JSON snapshot provided. Lead with the direct answer in one sentence, then give at most 5 short bullets of supporting evidence with key result ids in parentheses (e.g. KR13). Name owners. When something is off track, say what would unblock it and who needs to act. Never invent numbers that are not in the data. Use plain text with **bold** and "- " bullets only. Keep it under 180 words.`;
+    const system = `You are the chief of staff to the executive team at ${state.meta.company}. You answer questions about the company's OKRs using only the JSON snapshot provided. Lead with the direct answer in one sentence, then give at most 5 short bullets of supporting evidence with key result ids in parentheses (e.g. KR13). Name owners. When something is off track, say what would unblock it and who needs to act. When asked for mitigation ideas, start from suggestedActions and add specific, practical options grounded in the notes and blockers. Never invent numbers that are not in the data. Use plain text with **bold** and "- " bullets only. Keep it under 180 words.`;
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },

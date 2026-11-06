@@ -1,6 +1,6 @@
 /* App shell: state, routing, views, charts, forms. No framework, no build step. */
 
-const STORE_KEY = 'okr-system-v2';
+const STORE_KEY = 'okr-system-v3';
 let state;
 let askThread = [];
 
@@ -162,6 +162,7 @@ function viewOverview() {
       <div class="attn-top">${pill(x.h.status)}<span class="muted small">${esc(U.krTeam(state, x.kr).name)}</span></div>
       <div class="attn-title">${esc(x.kr.title)}</div>
       <div class="attn-why">${esc(x.h.reasons.join(' · ') || 'Behind pace')}</div>
+      ${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? `<div class="attn-next"><span aria-hidden="true">→</span> ${esc(sg.title)}</div>` : ''; })()}
       <div class="attn-foot">${avatar(state, x.kr.owner, 'sm')}<span>${esc(U.person(state, x.kr.owner).name)}</span><span class="muted">${U.fmt(x.kr, x.h.value)} → ${U.fmt(x.kr, x.kr.target)}</span></div>
     </button>`).join('');
 
@@ -244,7 +245,7 @@ function viewOkrs() {
     const last = Engine.lastCheckin(k);
     return `<button class="krrow" data-action="kr" data-id="${k.id}">
       <div class="kr-main"><div class="kr-title"><span class="kid-id">${k.id}</span>${esc(k.title)}</div>
-        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}</div></div>
+        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(k.actions || []).some((x) => !x.done) ? `<span class="tag good">Plan: ${(k.actions || []).filter((x) => !x.done).length}</span>` : ''}</div></div>
       <div class="kr-prog">${progressBar(h.progress, h.expected, h.status)}<div class="kr-vals"><b>${U.fmt(k, h.value)}</b> <span class="muted">of ${U.fmt(k, k.target)}</span></div></div>
       <div class="kr-conf">${confChip(h)}</div>
       <div class="kr-spark">${sparkline(k)}</div>
@@ -392,7 +393,7 @@ function briefText() {
   L.push('WHERE WE\'RE SLIPPING');
   P.attention.filter((x) => x.h.status !== 'on').slice(0, 5).forEach((x) => {
     const last = Engine.lastCheckin(x.kr);
-    L.push(`• ${x.kr.title} [${STATUS_LABEL[x.h.status]}]: ${U.fmt(x.kr, x.h.value)} of ${U.fmt(x.kr, x.kr.target)}; ${x.h.reasons.join(', ')}. ${last && last.note ? 'Owner: "' + last.note + '"' : ''}`);
+    L.push(`• ${x.kr.title} [${STATUS_LABEL[x.h.status]}]: ${U.fmt(x.kr, x.h.value)} of ${U.fmt(x.kr, x.kr.target)}; ${x.h.reasons.join(', ')}. ${last && last.note ? 'Owner: "' + last.note + '"' : ''}${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? ' Suggested next step: ' + sg.title + '.' : ''; })()}`);
   });
   L.push('');
   L.push('DECISIONS NEEDED');
@@ -484,6 +485,8 @@ function viewMethod() {
       <p>Status severity, plus weight for stale data, a confidence drop of 2+ points in a week, and open high-severity blockers. The ranking is designed to show an executive the three things worth their time, not everything that is imperfect.</p>
     </div>
     <div class="card prose">
+      <h2>Suggested actions</h2>
+      <p>Every key result that is at risk, off track or stale gets up to four suggested next steps, chosen from what is actually wrong. For example: a pending decision gets a push to decide, a target out of reach gets a resources/scope/reset call, a confidence drop gets a quick conversation, missing updates get a request for a fresh check-in. Add any suggestion to the key result's recovery plan with one click; it gets the owner and a one-week due date.</p>
       <h2>Ask</h2>
       <p>The built-in analyst recognises the questions executives actually ask — what needs attention, what's blocked, what changed, who hasn't updated, will we hit the target, why is X off track — and scopes them to any person, team, objective or topic. It runs entirely in the browser, needs no account, and every answer links back to the key results it used.</p>
       <p>For open-ended questions, connect Claude in <a href="#" data-action="settings">Settings</a> with your own Anthropic API key. The key stays in this browser and the full OKR snapshot is sent with each question.</p>
@@ -494,6 +497,24 @@ function viewMethod() {
     </div>
   </section>`;
 }
+
+/* ---------------- Suggestions & recovery plan ---------------- */
+function suggestionsHtml(k) {
+  const list = Suggest.forKr(state, k);
+  if (!list.length) return '';
+  return `<div class="suggest"><div class="suggest-h"><h3>Suggested actions</h3><span class="muted tiny">Based on pace, confidence, blockers and check-ins</span></div>
+    ${list.map((sg, i) => `<div class="sg"><div><div class="sg-title">${esc(sg.title)}</div><div class="small muted">${esc(sg.detail)}</div></div>
+      <button class="btn sm" data-action="adopt" data-id="${k.id}" data-i="${i}">+ Add to plan</button></div>`).join('')}
+    ${Ask.hasClaude() ? `<button class="btn sm ghost" data-action="ask" data-q="Suggest mitigation actions for ${esc(k.id)}">✦ Ask Claude for more ideas</button>` : ''}</div>`;
+}
+function planHtml(k) {
+  const acts = k.actions || [];
+  if (!acts.length) return '';
+  return `<h3>Recovery plan</h3><ul class="plain plan">${acts.map((a, i) => `<li class="${a.done ? 'done' : ''}">
+    <label><input type="checkbox" data-action="toggle-action" data-id="${k.id}" data-i="${i}" ${a.done ? 'checked' : ''}/> <span>${esc(a.title)}</span></label>
+    <div class="muted tiny">${esc(U.person(state, a.owner).name)} · due ${U.date(a.due)}${a.done ? ' · done' : ''}</div></li>`).join('')}</ul>`;
+}
+function addDays(iso, n) { const d = Engine.d(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
 
 /* ---------------- Drawer (KR detail) ---------------- */
 function openKr(id) {
@@ -530,6 +551,8 @@ function openKr(id) {
       ${h.reasons.length ? `<div class="callout">Why it's flagged: ${esc(h.reasons.join(' · '))}</div>` : ''}
       ${chart}
       <div class="row gap"><button class="btn primary" data-action="quick-checkin" data-id="${k.id}">Check in</button><button class="btn" data-action="new-risk" data-kr="${k.id}">Log blocker</button><button class="btn" data-action="ask" data-q="Why is ${esc(k.id)} ${h.status === 'on' ? 'on track' : 'behind'}?">Ask about this</button><button class="btn ghost" data-action="edit-kr" data-id="${k.id}">Edit</button></div>
+      ${suggestionsHtml(k)}
+      ${planHtml(k)}
       <h3>Blockers</h3>${risks ? `<ul class="plain">${risks}</ul>` : '<p class="muted small">None logged.</p>'}
       <h3>Check-in history</h3><ul class="feed">${hist || '<li class="muted">No check-ins yet.</li>'}</ul>
     </div>`;
@@ -667,7 +690,7 @@ function settings() {
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-action]'); if (!a) return;
   const act = a.dataset.action, id = a.dataset.id;
-  if (['checkin-person', 'risk-status', 'import'].includes(act)) return; // change handlers
+  if (['checkin-person', 'risk-status', 'import', 'toggle-action'].includes(act)) return; // change handlers
   e.preventDefault();
   switch (act) {
     case 'kr': closeModal(); openKr(id); break;
@@ -677,6 +700,14 @@ document.addEventListener('click', (e) => {
     case 'nav': location.hash = '#/' + a.dataset.to; break;
     case 'goto-obj': location.hash = '#/okrs'; setTimeout(() => { const el = document.getElementById('obj-' + id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); break;
     case 'ask': closeDrawer(); runAsk(a.dataset.q); break;
+    case 'adopt': {
+      const k = state.krs.find((x) => x.id === id);
+      const sg = Suggest.forKr(state, k)[+a.dataset.i];
+      if (!sg) break;
+      k.actions = k.actions || [];
+      k.actions.push({ title: sg.title, kind: sg.kind, owner: k.owner, due: addDays(state.meta.asOf, 7), done: false });
+      commit('Added to recovery plan'); openKr(k.id); break;
+    }
     case 'decide': {
       const r = state.risks.find((x) => x.id === id);
       r.decided = true; r.status = 'mitigating';
@@ -705,6 +736,7 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('change', (e) => {
   const t = e.target;
+  if (t.dataset.action === 'toggle-action') { const k = state.krs.find((x) => x.id === t.dataset.id); k.actions[+t.dataset.i].done = t.checked; commit(t.checked ? 'Action done' : 'Action reopened'); openKr(k.id); return; }
   if (t.dataset.action === 'checkin-person') { checkinPerson = t.value; render(); }
   if (t.dataset.action === 'risk-status') { const r = state.risks.find((x) => x.id === t.dataset.id); r.status = t.value; commit('Status updated'); }
   if (t.dataset.filter && t.tagName === 'SELECT') { okrFilter[t.dataset.filter] = t.value; render(); }

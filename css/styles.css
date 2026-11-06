@@ -357,3 +357,14 @@ body.modal-open .modal { display: grid; }
 }
 .sw.st-on { background: var(--good); } .sw.st-risk { background: var(--warn); } .sw.st-off { background: var(--crit); }
 .recent-dec { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
+.attn-next { font-size: 12.5px; color: var(--accent-ink); font-weight: 550; margin-top: 4px; }
+.suggest { border: 1px solid var(--border); border-radius: 10px; padding: 4px 14px 10px; margin: 16px 0 6px; background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.suggest-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.suggest-h h3 { margin: 12px 0 6px; }
+.sg { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border); }
+.sg:first-of-type { border-top: 0; }
+.sg-title { font-weight: 600; margin-bottom: 2px; }
+.sg .btn { flex: none; }
+.plan label { display: flex; gap: 8px; align-items: center; font-weight: 550; cursor: pointer; }
+.plan input { width: auto; accent-color: var(--accent); }
+.plan li.done span { text-decoration: line-through; color: var(--text-2); }
