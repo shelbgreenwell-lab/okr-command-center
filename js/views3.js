@@ -28,7 +28,7 @@ function viewCadence() {
   const perMonth = (m) => ({ weekly: 4.33, monthly: 1, quarterly: 1 / 3, semiannual: 1 / 6 }[m.freq] || 0) * m.minutes / 60;
   const hours = (state.cadence || []).reduce((a, m) => a + perMonth(m), 0);
   const cards = (state.cadence || []).map((m) => `<div class="card mcard">
-    <div class="card-h"><div><h2>${esc(m.name)}</h2><div class="muted small">${FREQ_LABEL[m.freq]}${m.weekday != null && m.freq !== 'quarterly' ? ' · ' + DAY_NAME[m.weekday] + (m.freq === 'monthly' ? ' (first of the month)' : '') : ''} · ${mins(m.minutes)} · run by ${esc(U.person(state, m.owner).name)}</div></div>
+    <div class="card-h"><div><h2>${esc(m.name)}</h2><div class="muted small">${FREQ_LABEL[m.freq]}${m.weekday != null && m.freq !== 'quarterly' ? ' · ' + DAY_NAME[m.weekday] + (m.freq === 'monthly' ? ' (first of the month)' : '') : ''} · ${mins(m.minutes)} · run by ${personLk(m.owner)}</div></div>
       <button class="btn sm" data-action="preread" data-id="${m.id}">Open pre-read</button></div>
     <dl class="mdl"><dt>Purpose</dt><dd>${esc(m.purpose)}</dd><dt>Who attends</dt><dd>${esc(m.attendees)}</dd><dt>Decision rights</dt><dd>${esc(m.rights)}</dd><dt>Leaves with</dt><dd>${esc(m.output)}</dd>
     <dt>Next</dt><dd><b>${U.date(Engine.nextMeeting(state, m), { weekday: 'long', month: 'long', day: 'numeric' })}</b></dd></dl></div>`).join('');
@@ -140,8 +140,8 @@ function openPreread(id) {
 /* ---------------- Decision records ---------------- */
 function decisionCard(d) {
   return `<div class="dcard">
-    <div class="dcard-h"><div><div class="dcard-t">${esc(d.decision)}</div>
-      <div class="muted small">Decider <b>${esc(U.person(state, d.decisionOwner).name)}</b>${d.consulted && d.consulted.length ? ` · consulted ${d.consulted.map((id) => esc(U.person(state, id).name)).join(', ')}` : ''} · raised by ${esc(U.person(state, d.owner).name)}</div></div>
+    <div class="dcard-h"><div><div class="dcard-t">${lk('risk', d.id, esc(d.decision), 'plain-lk')}</div>
+      <div class="muted small">Decider <b>${personLk(d.decisionOwner)}</b>${d.consulted && d.consulted.length ? ` · consulted ${d.consulted.map((id) => personLk(id)).join(', ')}` : ''} · raised by ${personLk(d.owner)}</div></div>
       <div class="dcard-age ${d.neededBy && d.neededBy < state.meta.asOf ? 'bad' : ''}">${d.age}d waiting${d.neededBy ? `<div class="tiny">needed by ${U.date(d.neededBy)}</div>` : ''}</div></div>
     ${d.context ? `<p class="small">${esc(d.context)}</p>` : ''}
     ${d.options && d.options.length ? `<ol class="opts">${d.options.map((o) => `<li class="${o === d.recommendation ? 'rec' : ''}">${esc(o)}${o === d.recommendation ? ' <span class="tag good">Recommended</span>' : ''}</li>`).join('')}</ol>` : `<p class="small"><b>Proposed:</b> ${esc(d.mitigation)}</p>`}
@@ -194,7 +194,7 @@ function viewMetrics() {
   const rows = I.rows.slice().sort((a, b) => order[a.mh.status] - order[b.mh.status]).map(({ kr, mh }) => {
     const m = mh.metric;
     const srcs = m ? m.sources.map((s) => `<div>${esc(s.system)}: <b>${U.fmt(kr, s.value)}</b></div>`).join('') : '—';
-    return `<tr class="mh-${mh.status}"><td><a href="#" data-action="kr" data-id="${kr.id}"><b>${esc(kr.title)}</b></a><div class="muted tiny">${kr.id} · ${esc(U.person(state, kr.owner).name)}</div></td>
+    return `<tr class="mh-${mh.status}"><td><a href="#" data-action="kr" data-id="${kr.id}"><b>${esc(kr.title)}</b></a><div class="muted tiny">${kr.id} · ${personLk(kr.owner)}</div></td>
       <td class="small">${m ? esc(m.definition) : '<span class="muted">Not defined</span>'}${m && m.note && mh.status === 'discrepancy' ? `<div class="bad tiny">${esc(m.note)}</div>` : ''}</td>
       <td class="small">${m ? esc(m.source) + `<div class="muted tiny">${esc(m.refresh)}</div>` : '—'}</td>
       <td class="small">${srcs}${mh.status === 'discrepancy' ? `<div class="tiny bad">${Math.round(mh.spread)}% apart (tolerance ${m.tolerance}%)</div>` : ''}</td>

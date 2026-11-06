@@ -18,9 +18,9 @@ function sinceBanner() {
   const li = [];
   d.worse.forEach((x) => li.push(`<li><span class="st-${x.to}-t sm">${STATUS_ICON[x.to]}</span> <a href="#" data-action="kr" data-id="${x.k.id}">${esc(x.k.title)}</a> slipped from ${STATUS_LABEL[x.from].toLowerCase()} to <b>${STATUS_LABEL[x.to].toLowerCase()}</b></li>`));
   d.better.forEach((x) => li.push(`<li><span class="st-${x.to}-t sm">${STATUS_ICON[x.to]}</span> <a href="#" data-action="kr" data-id="${x.k.id}">${esc(x.k.title)}</a> improved to <b>${STATUS_LABEL[x.to].toLowerCase()}</b></li>`));
-  d.newRisks.forEach((r) => li.push(`<li>⚑ New blocker: ${esc(r.title)} <span class="muted">(${esc(r.severity)})</span></li>`));
-  d.newDecisions.forEach((x) => li.push(`<li>✓ Decided: ${esc(x.title)}</li>`));
-  d.newlyDone.forEach((c) => li.push(`<li>✓ Commitment done: ${esc(c.text)} <span class="muted">(${esc(U.person(state, c.owner).name)})</span></li>`));
+  d.newRisks.forEach((r) => li.push(`<li>⚑ New blocker: ${lk('risk', r.id, esc(r.title))} <span class="muted">(${esc(r.severity)})</span></li>`));
+  d.newDecisions.forEach((x) => li.push(`<li>✓ Decided: ${lk('decision', x.id, esc(x.title))}</li>`));
+  d.newlyDone.forEach((c) => li.push(`<li>✓ Commitment done: ${lk('commitment', c.id, esc(c.text))} <span class="muted">(${esc(U.person(state, c.owner).name)})</span></li>`));
   return `<section class="card since"><div class="card-h"><h2>Since ${when}${sinceSnap.firstVisit ? '' : ' · ' + U.date(sinceSnap.at.slice(0, 10))}</h2><button class="btn sm ghost" data-action="dismiss-since">Mark as seen</button></div><ul class="plain compact">${li.slice(0, 8).join('')}</ul></section>`;
 }
 
@@ -38,13 +38,13 @@ function depsHtml(k) {
   const mine = Engine.depsFor(state, k.id), theirs = Engine.dependents(state, k.id);
   if (!mine.length && !theirs.length) return '';
   const row = (d, dir) => `<li><span class="dep-badge dep-${d.label.replace(' ', '-')}">${esc(d.label)}</span> ${dir === 'in'
-    ? `Needs from <b>${esc(d.up ? d.onKr + ' · ' + U.person(state, d.up.owner).name : U.team(state, d.fromTeam).name)}</b>: ${esc(d.need)}`
-    : `<a href="#" data-action="kr" data-id="${d.kr}">${d.kr}</a> needs: ${esc(d.need)}`} <span class="muted tiny">due ${U.date(d.due)}</span></li>`;
+    ? `Needs from <b>${d.up ? krLk(d.onKr, d.onKr) + ' · ' + personLk(d.up.owner) : teamLk(d.fromTeam)}</b>: ${lk('dep', d.id, esc(d.need))}`
+    : `${krLk(d.kr, d.kr)} needs: ${lk('dep', d.id, esc(d.need))}`} <span class="muted tiny">due ${U.date(d.due)}</span></li>`;
   return `<h3>Dependencies</h3><ul class="plain compact">${mine.map((d) => row(d, 'in')).join('')}${theirs.map((d) => row(d, 'out')).join('')}</ul>`;
 }
 function initsHtml(k) {
   const list = (state.initiatives || []).filter((i) => i.krs.includes(k.id));
-  return `<h3>Funded work</h3>${list.length ? `<ul class="plain compact">${list.map((i) => `<li>${pill(i.status)} <b>${esc(i.title)}</b> <span class="muted small">· ${i.fte} FTE · ${fmtK(i.budget)} budget · ${esc(U.person(state, i.owner).name)}</span></li>`).join('')}</ul>` : '<p class="muted small">No initiative is linked to this key result.</p>'}`;
+  return `<h3>Funded work</h3>${list.length ? `<ul class="plain compact">${list.map((i) => `<li>${pill(i.status)} ${lk('initiative', i.id, '<b>' + esc(i.title) + '</b>')} <span class="muted small">· ${i.fte} FTE · ${i.budget ? fmtK(i.budget) + ' budget' : 'no budget'} · ${esc(U.person(state, i.owner).name)}</span></li>`).join('')}</ul>` : '<p class="muted small">No initiative is linked to this key result.</p>'}`;
 }
 
 /* ---------------- Weekly review ---------------- */
@@ -54,10 +54,10 @@ function viewReview() {
   const fromLast = C.all.filter((c) => c.review === last);
   const statusBtns = (c) => `<div class="seg sm">${['open', 'done', 'dropped'].map((s) => `<button class="${c.status === s ? 'on' : ''}" data-action="commit-status" data-id="${c.id}" data-v="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
   const crow = (c) => `<div class="crow ${c.status}">
-    <div><div class="crow-t">${c.overdue ? '<span class="tag bad">Overdue</span> ' : ''}${esc(c.text)}</div>
-    <div class="muted small">${esc(U.person(state, c.owner).name)} · due ${U.date(c.due)}${c.kr ? ` · <a href="#" data-action="kr" data-id="${c.kr}">${c.kr}</a>` : ''}${c.source === 'plan' ? ' · from recovery plan' : ''}</div></div>${statusBtns(c)}</div>`;
+    <div><div class="crow-t">${c.overdue ? '<span class="tag bad">Overdue</span> ' : ''}${lk('commitment', c.id, esc(c.text), 'plain-lk')}</div>
+    <div class="muted small">${personLk(c.owner)} · due ${U.date(c.due)}${c.kr ? ` · <a href="#" data-action="kr" data-id="${c.kr}">${c.kr}</a>` : ''}${c.source === 'plan' ? ' · from recovery plan' : ''}</div></div>${statusBtns(c)}</div>`;
   const others = C.all.filter((c) => c.review !== last && c.status === 'open').sort((a, b) => a.due.localeCompare(b.due));
-  const owners = C.byOwner.filter((o) => o.rate !== null).sort((a, b) => a.rate - b.rate).map((o) => `<tr><td>${avatar(state, o.owner, 'sm')} ${esc(U.person(state, o.owner).name)}</td><td class="num">${o.done}</td><td class="num">${o.overdue ? `<b class="bad">${o.overdue}</b>` : 0}</td><td class="num">${o.dropped}</td><td class="num"><b>${U.pct(o.rate)}</b></td></tr>`).join('');
+  const owners = C.byOwner.filter((o) => o.rate !== null).sort((a, b) => a.rate - b.rate).map((o) => `<tr><td>${avatar(state, o.owner, 'sm')} ${personLk(o.owner)}</td><td class="num">${o.done}</td><td class="num">${o.overdue ? `<b class="bad">${o.overdue}</b>` : 0}</td><td class="num">${o.dropped}</td><td class="num"><b>${U.pct(o.rate)}</b></td></tr>`).join('');
   const P = Engine.portfolio(state);
   const agenda = briefText().split('\n');
   const ai = agenda.findIndex((l) => l.startsWith('PROPOSED WEEKLY'));
@@ -99,13 +99,13 @@ function viewInitiatives() {
   const rowBar = (label, fte, budget, cls, sub) => `<div class="rrow"><div class="rrow-name">${label}${sub ? `<div class="muted tiny">${sub}</div>` : ''}</div>
     <div class="rbar-wrap" data-tip="${esc(`${fte.toFixed(1)} FTE (${U.pct(fte / R.totalFte)}) · ${fmtK(budget)} budget (${U.pct(budget / R.totalBudget)})`)}"><div class="rbar ${cls}" style="width:${(fte / maxF) * 100}%"></div></div>
     <div class="rrow-v"><b>${fte.toFixed(1)}</b> FTE<div class="muted tiny">${fmtK(budget)}</div></div></div>`;
-  const bars = R.rows.map((r) => { const s = Engine.objective(state, r.obj); return rowBar(`<span class="oid">${r.obj.id}</span> ${esc(r.obj.title)}`, r.fte, r.budget, 'pbar-' + s.status, STATUS_LABEL[s.status]); }).join('')
+  const bars = R.rows.map((r) => { const s = Engine.objective(state, r.obj); return rowBar(`<span class="oid">${r.obj.id}</span> ${lk('objective', r.obj.id, esc(r.obj.title))}`, r.fte, r.budget, 'pbar-' + s.status, STATUS_LABEL[s.status]); }).join('')
     + rowBar('Not linked to any objective', R.unaligned.fte, R.unaligned.budget, 'rbar-none', `${R.unaligned.inits.length} initiatives`);
   const rows = (state.initiatives || []).map((i) => {
     const krs = i.krs.map((id) => { const k = state.krs.find((x) => x.id === id); return k ? `<a href="#" data-action="kr" data-id="${id}" data-tip="${esc(k.title)}">${id}</a>` : id; }).join(', ');
     const burn = i.budget ? i.spent / i.budget : 0;
-    return `<tr class="${i.krs.length ? '' : 'unaligned'}"><td><b>${esc(i.title)}</b><div class="muted tiny">${esc(U.team(state, i.team).name)}</div></td>
-      <td>${krs || '<span class="tag warn">No key result</span>'}</td><td>${avatar(state, i.owner, 'sm')} <span class="small">${esc(U.person(state, i.owner).name)}</span></td>
+    return `<tr class="${i.krs.length ? '' : 'unaligned'}"><td><b>${lk('initiative', i.id, esc(i.title), 'plain-lk')}</b><div class="muted tiny">${teamLk(i.team)}</div></td>
+      <td>${krs || '<span class="tag warn">No key result</span>'}</td><td>${avatar(state, i.owner, 'sm')} <span class="small">${personLk(i.owner)}</span></td>
       <td class="num">${i.fte}</td><td class="num">${i.budget ? fmtK(i.budget) : '—'}<div class="muted tiny">${i.budget ? U.pct(burn) + ' spent' : '—'}</div></td><td>${pill(i.status)}</td></tr>`;
   }).join('');
   const unc = R.uncovered.map((k) => { const h = Engine.kr(state, k); return `<li>${pill(h.status)} <a href="#" data-action="kr" data-id="${k.id}">${esc(k.title)}</a> <span class="muted small">· ${esc(U.person(state, k.owner).name)}</span></li>`; }).join('');
@@ -135,15 +135,15 @@ function viewDeps() {
   deps.forEach((d) => { (byProvider[d.fromTeam] = byProvider[d.fromTeam] || []).push(d); });
   const groups = Object.entries(byProvider).sort((a, b) => b[1].filter((d) => d.risk).length - a[1].filter((d) => d.risk).length).map(([tid, list]) => {
     const atRisk = list.filter((d) => d.risk).length;
-    return `<div class="card"><div class="card-h"><h2>Waiting on ${esc(U.team(state, tid).name)}</h2><span class="small ${atRisk ? 'bad' : 'muted'}">${atRisk ? atRisk + ' at risk or late' : 'all on time'}</span></div>
+    return `<div class="card"><div class="card-h"><h2>Waiting on ${teamLk(tid)}</h2><span class="small ${atRisk ? 'bad' : 'muted'}">${atRisk ? atRisk + ' at risk or late' : 'all on time'}</span></div>
       <ul class="plain">${list.map((d) => { const k = state.krs.find((x) => x.id === d.kr); const team = U.workTeam(state, k).name; return `<li><span class="dep-badge dep-${d.label.replace(' ', '-')}">${esc(d.label)}</span>
-        <b>${esc(team)}</b> needs <i>${esc(d.need)}</i> by ${U.date(d.due)}
+        <b>${esc(team)}</b> needs ${lk('dep', d.id, '<i>' + esc(d.need) + '</i>')} by ${U.date(d.due)}
         <div class="muted small">For <a href="#" data-action="kr" data-id="${k.id}">${esc(k.title)}</a>${d.up ? ` · depends on <a href="#" data-action="kr" data-id="${d.up.id}">${esc(d.up.title)}</a> (${STATUS_LABEL[d.upH.status].toLowerCase()})` : ''}</div></li>`; }).join('')}</ul></div>`;
   }).join('');
   // team x team matrix: rows = team that needs, cols = team providing
   const used = teams.filter((t) => deps.some((d) => d.fromTeam === t.id || U.workTeam(state, state.krs.find((k) => k.id === d.kr)).name === t.name));
   const cell = (need, give) => { const list = deps.filter((d) => d.fromTeam === give.id && U.workTeam(state, state.krs.find((k) => k.id === d.kr)).name === need.name && !d.delivered); if (!list.length) return '<td class="mx-empty">·</td>'; const r = list.filter((d) => d.risk).length; return `<td class="mx ${r ? 'mx-risk' : ''}" data-tip="${esc(list.map((d) => d.need).join(' · '))}">${list.length}${r ? `<small> (${r}⚠)</small>` : ''}</td>`; };
-  const matrix = `<table class="simple matrix"><thead><tr><th>Needs ↓ / from →</th>${used.map((t) => `<th>${esc(t.name)}</th>`).join('')}</tr></thead><tbody>${used.map((n) => `<tr><th>${esc(n.name)}</th>${used.map((g) => cell(n, g)).join('')}</tr>`).join('')}</tbody></table>`;
+  const matrix = `<table class="simple matrix"><thead><tr><th>Needs ↓ / from →</th>${used.map((t) => `<th>${esc(t.name)}</th>`).join('')}</tr></thead><tbody>${used.map((n) => `<tr><th>${teamLk(n.id)}</th>${used.map((g) => cell(n, g)).join('')}</tr>`).join('')}</tbody></table>`;
   const late = deps.filter((d) => d.late).length, risk = deps.filter((d) => d.risk && !d.late).length;
   return `
   <header class="page-h"><div><h1>Dependencies</h1><p class="muted">Who is waiting on whom. A dependency is flagged when it is past due or when the work it relies on is itself behind — so one team's slip shows up before it lands on another.</p></div>
@@ -168,7 +168,7 @@ function viewHistory() {
   const rows = state.teams.filter((t) => t.id !== 'co').map((t) => {
     const past = H.teams[t.id] || [];
     const cal = Engine.calibration(past);
-    return `<tr><th>${esc(t.name)}</th>${H.quarters.map((q, i) => cell(past[i])).join('')}${cell(teamProj(t.id), true)}<td><span class="tag ${cal.tone}">${cal.label}</span></td></tr>`;
+    return `<tr><th>${teamLk(t.id)}</th>${H.quarters.map((q, i) => cell(past[i])).join('')}${cell(teamProj(t.id), true)}<td><span class="tag ${cal.tone}">${cal.label}</span></td></tr>`;
   }).join('');
   const series = [...H.company.map((v, i) => [i, v]), [H.quarters.length, projCo]];
   chartFormatters.history = { x: (i) => (H.quarters[i] || curQ + ' (projected)'), y: (v) => v.toFixed(2) };
@@ -199,7 +199,7 @@ function viewBoard() {
     const s = Engine.objective(state, o);
     const exp = s.krs.reduce((a, k) => a + Engine.kr(state, k).exposure, 0) + s.children.reduce((a, c) => a + state.krs.filter((k) => k.obj === c.id).reduce((b, k) => b + Engine.kr(state, k).exposure, 0), 0);
     const r = R.rows.find((x) => x.obj.id === o.id);
-    return `<tr><td><b>${esc(o.title)}</b><div class="muted tiny">${esc(U.person(state, o.owner).name)}</div></td><td>${pill(s.status)}</td><td class="num">${U.pct(s.progress)}</td><td class="num">${Engine.projectedScore(state, [...s.krs, ...state.krs.filter((k) => s.children.some((c) => c.id === k.obj))]).toFixed(2)}</td><td class="num">${exp ? fmtK(exp) : '—'}</td><td class="num">${r ? U.pct(r.fte / R.totalFte) : '—'}</td></tr>`;
+    return `<tr><td><b>${lk('objective', o.id, esc(o.title), 'plain-lk')}</b><div class="muted tiny">${personLk(o.owner)}</div></td><td>${pill(s.status)}</td><td class="num">${U.pct(s.progress)}</td><td class="num">${Engine.projectedScore(state, [...s.krs, ...state.krs.filter((k) => s.children.some((c) => c.id === k.obj))]).toFixed(2)}</td><td class="num">${exp ? fmtK(exp) : '—'}</td><td class="num">${r ? U.pct(r.fte / R.totalFte) : '—'}</td></tr>`;
   }).join('');
   const topExp = P.all.filter((x) => x.h.exposure > 0).sort((a, b) => b.h.exposure - a.h.exposure).slice(0, 3);
   const risks = state.risks.filter((r) => r.status !== 'closed').map((r) => ({ r, k: state.krs.find((x) => x.id === r.kr) })).map((x) => ({ ...x, exp: Engine.kr(state, x.k).exposure }))
@@ -220,11 +220,11 @@ function viewBoard() {
     <h3>Company objectives</h3>
     <table class="simple"><thead><tr><th>Objective</th><th>Status</th><th>Progress</th><th>Proj. score</th><th>Value at risk</th><th>% of people</th></tr></thead><tbody>${objRows}</tbody></table>
     <div class="board-cols">
-      <div><h3>Largest value at risk</h3><ul>${topExp.map((x) => `<li><b>${fmtK(x.h.exposure)}</b> — ${esc(x.kr.title)} <span class="muted">(${STATUS_LABEL[x.h.status].toLowerCase()})</span></li>`).join('')}</ul></div>
-      <div><h3>Top risks</h3><ul>${risks.map((x) => `<li><b>${esc(x.r.title)}.</b> ${esc(x.r.impact)} <span class="muted">Response: ${esc(x.r.mitigation)}</span></li>`).join('')}</ul></div>
+      <div><h3>Largest value at risk</h3><ul>${topExp.map((x) => `<li><b>${fmtK(x.h.exposure)}</b> — ${krLk(x.kr.id)} <span class="muted">(${STATUS_LABEL[x.h.status].toLowerCase()})</span></li>`).join('')}</ul></div>
+      <div><h3>Top risks</h3><ul>${risks.map((x) => `<li><b>${lk('risk', x.r.id, esc(x.r.title), 'plain-lk')}.</b> ${esc(x.r.impact)} <span class="muted">Response: ${esc(x.r.mitigation)}</span></li>`).join('')}</ul></div>
     </div>
     <div class="board-cols">
-      <div><h3>Decisions made this quarter</h3><ul>${decisions.map((d) => `<li><span class="muted">${U.date(d.date)}</span> ${esc(d.title)}</li>`).join('') || '<li class="muted">None yet.</li>'}</ul></div>
+      <div><h3>Decisions made this quarter</h3><ul>${decisions.map((d) => `<li><span class="muted">${U.date(d.date)}</span> ${lk('decision', d.id, esc(d.title))}</li>`).join('') || '<li class="muted">None yet.</li>'}</ul></div>
       <div><h3>Execution health</h3><ul>
         <li>Commitment follow-through: <b>${U.pct(P.commitments.rate)}</b> (${P.commitments.overdue.length} overdue)</li>
         <li>Exec decisions waiting: <b>${P.decisions.length}</b>${P.decisions.length ? `, oldest ${P.decisions[0].age} days` : ''}</li>

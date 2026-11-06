@@ -464,3 +464,22 @@ tr.mh-discrepancy td { background: color-mix(in srgb, var(--crit) 5%, transparen
 .memo.inmodal p:first-child { font-size: 18px; }
 .kpi-val small { font-size: 15px; font-weight: 500; }
 @media (max-width: 900px) { .dgrid { grid-template-columns: 1fr; } .mdl { grid-template-columns: 1fr; } .profile-sel { max-width: 150px; } .topbar #asof { display: none; } }
+
+/* ---- v8: everything clickable ---- */
+a.lk { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 3px; cursor: pointer; }
+a.lk:hover { color: var(--accent-ink); text-decoration-color: var(--accent); }
+a.lk.plain-lk { text-decoration: none; }
+a.lk.plain-lk:hover { text-decoration: underline; }
+.drawer-h a.lk, .drawer-b a.lk, .since a.lk { color: var(--accent-ink); }
+.avatar[data-action] { cursor: pointer; }
+.avatar[data-action]:hover { border-color: var(--accent); color: var(--accent-ink); }
+.objcard { cursor: pointer; }
+.back-btn { all: unset; cursor: pointer; display: block; padding: 12px 22px 0; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); }
+.back-btn:hover { text-decoration: underline; }
+.facts { display: grid; grid-template-columns: 120px 1fr; gap: 8px 14px; margin: 4px 0 14px; font-size: 13px; }
+.facts dt { color: var(--text-2); font-weight: 550; } .facts dd { margin: 0; }
+.facts select { width: auto; }
+.plan-row { display: flex; gap: 8px; align-items: center; font-weight: 550; }
+.plan-row input { width: auto; accent-color: var(--accent); }
+.plan li.done .plan-row span { text-decoration: line-through; color: var(--text-2); }
+@media (max-width: 900px) { .facts { grid-template-columns: 1fr; gap: 2px; } .facts dd { margin-bottom: 8px; } }

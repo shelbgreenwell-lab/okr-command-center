@@ -18,7 +18,7 @@ function switchProfile(p) {
   try { localStorage.setItem('okr-profile', p); } catch (e) {}
   loadSince(); closeDrawer(); render(); toast('Showing the ' + PROFILES[p].label.toLowerCase() + ' demo');
 }
-function commit(msg) { save(); render(); if (msg) toast(msg); }
+function commit(msg) { save(); render(); refreshDrawer(); if (msg) toast(msg); }
 
 /* ---------------- Small UI pieces ---------------- */
 const $ = (s, el = document) => el.querySelector(s);
@@ -29,7 +29,7 @@ function pill(status) {
 }
 function avatar(state, id, size = '') {
   const p = U.person(state, id);
-  return `<span class="avatar ${size}" data-tip="${esc(p.name)} · ${esc(p.title)}">${esc(U.initials(p.name))}</span>`;
+  return `<span class="avatar ${size}" data-action="detail" data-kind="person" data-id="${esc(id)}" data-tip="${esc(p.name)} · ${esc(p.title)}">${esc(U.initials(p.name))}</span>`;
 }
 function progressBar(progress, expected, status, tip) {
   const w = Math.min(100, progress * 100);
@@ -186,12 +186,12 @@ function viewOverview() {
 
   const decisions = P.decisions.map((d) => `
     <div class="decision">
-      <div><div class="decision-title">${esc(d.decision)}</div>
+      <div><div class="decision-title">${lk('risk', d.id, esc(d.decision))}</div>
       <div class="muted small">Waiting ${d.age} days · decider ${esc(U.person(state, d.decisionOwner).name)} · unblocks <a href="#" data-action="kr" data-id="${d.kr}">${esc(d.kr)}</a></div></div>
       <button class="btn sm" data-action="decide" data-id="${d.id}">Record decision</button>
     </div>`).join('') || '<p class="muted">No decisions waiting. Nice.</p>';
   const recentDec = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3)
-    .map((d) => `<li><span class="muted small">${U.date(d.date)}</span> ${esc(d.title)}</li>`).join('');
+    .map((d) => `<li><span class="muted small">${U.date(d.date)}</span> ${lk('decision', d.id, esc(d.title))}</li>`).join('');
 
   const trend = Engine.trend(state, state.krs);
   const wk = Engine.totalWeeks(state);
@@ -205,7 +205,7 @@ function viewOverview() {
   const teams = state.teams.filter((t) => t.id !== 'co').map((t) => ({ t, s: Engine.team(state, t.id) }));
   const teamBars = teams.map(({ t, s }) => {
     const st = s.counts.off ? 'off' : s.counts.risk ? 'risk' : 'on';
-    return `<div class="trow"><div class="trow-name">${esc(t.name)}</div>
+    return `<div class="trow"><div class="trow-name">${teamLk(t.id)}</div>
       ${progressBar(s.progress, P.expected, st, `${t.name}: ${U.pct(s.progress)} complete · ${s.counts.on} on track, ${s.counts.risk} at risk, ${s.counts.off} off track`)}
       <div class="trow-val">${U.pct(s.progress)}</div></div>`;
   }).join('');
@@ -213,13 +213,13 @@ function viewOverview() {
   const companyObjs = state.objectives.filter((o) => !o.parent).map((o) => {
     const s = Engine.objective(state, o);
     const kids = s.children.map((c) => { const cs = Engine.objective(state, c); return `<span class="kid"><i class="dotst st-${cs.status}"></i>${esc(U.team(state, c.team).name)}</span>`; }).join('');
-    return `<a class="objcard" href="#/okrs" data-action="goto-obj" data-id="${o.id}">
+    return `<div class="objcard" role="button" tabindex="0" data-action="detail" data-kind="objective" data-id="${o.id}">
       <div class="objcard-top"><span class="oid">${o.id}</span>${pill(s.status)}</div>
       <div class="objcard-title">${esc(o.title)}</div>
       ${progressBar(s.progress, s.expected, s.status)}
       <div class="objcard-meta"><span>${U.pct(s.progress)} complete</span><span>${s.counts.on}● ${s.counts.risk}▲ ${s.counts.off}■</span></div>
       <div class="kids">Aligned: ${kids}</div>
-    </a>`;
+    </div>`;
   }).join('');
 
   return `
@@ -283,9 +283,9 @@ function viewOkrs() {
     return `<div class="obj depth${depth}" id="obj-${o.id}">
       ${teamOk ? `<div class="obj-h">
         <div class="obj-hl"><span class="oid">${o.id}</span><span class="obj-team">${esc(U.team(state, o.team).name)}</span>${o.parent ? `<span class="muted tiny">supports ${o.parent}</span>` : ''}</div>
-        <div class="obj-title">${esc(o.title)}</div>
+        <div class="obj-title">${lk('objective', o.id, esc(o.title), 'plain-lk')}</div>
         <div class="obj-why muted">${esc(o.why || '')}</div>
-        <div class="obj-meta">${avatar(state, o.owner, 'sm')}<span>${esc(U.person(state, o.owner).name)}</span>
+        <div class="obj-meta">${avatar(state, o.owner, 'sm')}<span>${personLk(o.owner)}</span>
           <div class="obj-prog">${progressBar(s.progress, s.expected, s.status)}</div><span>${U.pct(s.progress)}</span>${pill(s.status)}
           <span class="obj-actions"><button class="btn sm ghost" data-action="new-kr" data-id="${o.id}">+ Key result</button><button class="btn sm ghost" data-action="edit-obj" data-id="${o.id}">Edit</button></span></div>
       </div>
@@ -368,18 +368,18 @@ function viewRisks() {
     const age = Engine.daysBetween(r.raised, state.meta.asOf);
     return `<tr class="${r.status === 'closed' ? 'closed' : ''}">
       <td><span class="sev sev-${r.severity}">${r.severity}</span></td>
-      <td><div class="risk-title">${esc(r.title)}</div><div class="muted small">${esc(r.impact)}</div>
+      <td><div class="risk-title">${lk('risk', r.id, esc(r.title), 'plain-lk')}</div><div class="muted small">${esc(r.impact)}</div>
         <div class="small"><b>Mitigation:</b> ${esc(r.mitigation)}</div>
-        ${r.decision ? `<div class="small decision-inline ${r.decided ? 'done' : ''}">${r.decided ? '✓ Decided' : '⚑ Decision needed'}: ${esc(r.decision)} <span class="muted">(${esc(U.person(state, r.decisionOwner).name)})</span></div>` : ''}</td>
+        ${r.decision ? `<div class="small decision-inline ${r.decided ? 'done' : ''}">${r.decided ? '✓ Decided' : '⚑ Decision needed'}: ${esc(r.decision)} <span class="muted">(${personLk(r.decisionOwner)})</span></div>` : ''}</td>
       <td>${k ? `<a href="#" data-action="kr" data-id="${k.id}">${k.id}</a><div class="muted tiny">${esc(k.title)}</div>` : '—'}</td>
-      <td>${avatar(state, r.owner, 'sm')} <span class="small">${esc(U.person(state, r.owner).name)}</span></td>
+      <td>${avatar(state, r.owner, 'sm')} <span class="small">${personLk(r.owner)}</span></td>
       <td class="num">${age}d</td>
       <td><select data-action="risk-status" data-id="${r.id}">${['open', 'mitigating', 'closed'].map((s) => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
         ${r.decision && !r.decided && r.status !== 'closed' ? `<button class="btn sm" data-action="decide" data-id="${r.id}">Record decision</button>` : ''}</td>
     </tr>`;
   }).join('');
   const open = state.risks.filter((r) => r.status !== 'closed');
-  const decisions = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((d) => `<li><span class="muted small">${U.date(d.date)}</span> <b>${esc(d.title)}</b> <span class="muted small">— ${esc(U.person(state, d.owner).name)}${d.kr ? ' · ' + d.kr : ''}${d.requested ? ' · decided in ' + Engine.daysBetween(d.requested, d.date) + 'd' : ''}</span>${d.rationale ? `<div class="muted small">Why: ${esc(d.rationale)}</div>` : ''}</li>`).join('');
+  const decisions = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((d) => `<li><span class="muted small">${U.date(d.date)}</span> <b>${lk('decision', d.id, esc(d.title), 'plain-lk')}</b> <span class="muted small">— ${esc(U.person(state, d.owner).name)}${d.kr ? ' · ' + d.kr : ''}${d.requested ? ' · decided in ' + Engine.daysBetween(d.requested, d.date) + 'd' : ''}</span>${d.rationale ? `<div class="muted small">Why: ${esc(d.rationale)}</div>` : ''}</li>`).join('');
   return `
   <header class="page-h"><div><h1>Risks, blockers & decisions</h1><p class="muted">Every blocker is tied to the key result it threatens, has an owner and a mitigation, and says plainly when an executive decision is the unblock.</p></div>
   <div class="row"><button class="btn" data-action="request-decision">+ Request a decision</button><button class="btn primary" data-action="new-risk">+ Log a blocker</button></div></header>
@@ -555,13 +555,14 @@ function planHtml(k) {
   const acts = (state.commitments || []).filter((c) => c.kr === k.id && c.status !== 'dropped');
   if (!acts.length) return '';
   return `<h3>Actions & commitments</h3><ul class="plain plan">${acts.map((a) => { const overdue = a.status === 'open' && a.due < state.meta.asOf; return `<li class="${a.status === 'done' ? 'done' : ''}">
-    <label><input type="checkbox" data-action="toggle-action" data-id="${a.id}" data-kr="${k.id}" ${a.status === 'done' ? 'checked' : ''}/> <span>${esc(a.text)}</span>${overdue ? ' <span class="tag bad">Overdue</span>' : ''}</label>
+    <div class="plan-row"><input type="checkbox" aria-label="Done" data-action="toggle-action" data-id="${a.id}" data-kr="${k.id}" ${a.status === 'done' ? 'checked' : ''}/> <span>${lk('commitment', a.id, esc(a.text))}</span>${overdue ? ' <span class="tag bad">Overdue</span>' : ''}</div>
     <div class="muted tiny">${esc(U.person(state, a.owner).name)} · due ${U.date(a.due)}${a.status === 'done' ? ' · done' : ''}${a.source === 'plan' ? ' · recovery plan' : a.review ? ' · from ' + U.date(a.review) + ' review' : ''}</div></li>`; }).join('')}</ul>`;
 }
 function addDays(iso, n) { const d = Engine.d(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
 
 /* ---------------- Drawer (KR detail) ---------------- */
-function openKr(id) {
+function openKr(id) { openDetail('kr', id); }
+function renderKr(id) {
   const k = state.krs.find((x) => x.id === id); if (!k) return;
   const h = Engine.kr(state, k);
   const o = U.obj(state, k.obj);
@@ -579,10 +580,10 @@ function openKr(id) {
     xMax: wk, xLabel: (i) => 'W' + i, yFmt: (v) => U.fmt(k, v), yMin: lo - pad, yMax: hi + pad, height: 200,
   });
   const hist = k.checkins.slice().reverse().map((c) => `<li><div class="feed-h"><b>${U.fmt(k, c.value)}</b><span class="muted small">${U.date(c.date)} · confidence ${c.confidence}/10 · ${esc(U.person(state, c.by || k.owner).name)}</span></div>${c.note ? `<div class="small">${esc(c.note)}</div>` : ''}</li>`).join('');
-  const risks = state.risks.filter((r) => r.kr === k.id).map((r) => `<li><span class="sev sev-${r.severity}">${r.severity}</span> <b>${esc(r.title)}</b> <span class="muted small">(${r.status})</span><div class="small muted">${esc(r.mitigation)}</div></li>`).join('');
+  const risks = state.risks.filter((r) => r.kr === k.id).map((r) => `<li><span class="sev sev-${r.severity}">${r.severity}</span> ${lk('risk', r.id, '<b>' + esc(r.title) + '</b>')} <span class="muted small">(${r.status})</span><div class="small muted">${esc(r.mitigation)}</div></li>`).join('');
   $('#drawer').innerHTML = `
-    <div class="drawer-h"><div><div class="muted small"><span class="oid">${o.id}</span> ${esc(o.title)}</div><h2>${esc(k.title)}</h2>
-      <div class="row">${pill(h.status)}${avatar(state, k.owner, 'sm')}<span class="small">${esc(U.person(state, k.owner).name)} · ${esc(U.person(state, k.owner).title)}</span></div></div>
+    <div class="drawer-h"><div><div class="muted small"><span class="oid">${o.id}</span> ${lk('objective', o.id, esc(o.title))}</div><h2>${esc(k.title)}</h2>
+      <div class="row">${pill(h.status)}${avatar(state, k.owner, 'sm')}<span class="small">${personLk(k.owner)} · ${esc(U.person(state, k.owner).title)}</span></div></div>
       <button class="icon-btn" data-action="close-drawer" aria-label="Close">✕</button></div>
     <div class="drawer-b">
       <div class="stats">
@@ -608,7 +609,7 @@ function openKr(id) {
   document.body.classList.add('drawer-open');
   bindCharts($('#drawer'));
 }
-function closeDrawer() { document.body.classList.remove('drawer-open'); }
+function closeDrawer() { document.body.classList.remove('drawer-open'); drawerStack = []; }
 
 /* ---------------- Modal forms ---------------- */
 function modal(title, fields, onSubmit, opts = {}) {
@@ -768,11 +769,18 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   switch (act) {
     case 'kr': closeModal(); openKr(id); break;
+    case 'detail': closeModal(); openDetail(a.dataset.kind, id); break;
+    case 'drawer-back': drawerBack(); break;
+    case 'edit-risk': editRisk(id); break;
+    case 'edit-commitment': editCommitment(id); break;
+    case 'edit-initiative': editInitiative(id); break;
+    case 'edit-dep': editDep(id); break;
+    case 'dep-delivered': { const d = state.deps.find((x) => x.id === id); d.delivered = !d.delivered; commit(d.delivered ? 'Marked delivered' : 'Marked not delivered'); break; }
     case 'close-drawer': closeDrawer(); break;
     case 'close-modal': closeModal(); break;
     case 'modal-danger': modal.onDanger && modal.onDanger(); break;
     case 'nav': location.hash = '#/' + a.dataset.to; break;
-    case 'goto-obj': location.hash = '#/okrs'; setTimeout(() => { const el = document.getElementById('obj-' + id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); break;
+    case 'goto-obj': closeDrawer(); location.hash = '#/okrs'; setTimeout(() => { const el = document.getElementById('obj-' + id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); break;
     case 'ask': closeDrawer(); runAsk(a.dataset.q); break;
     case 'adopt': {
       const k = state.krs.find((x) => x.id === id);
@@ -786,12 +794,12 @@ document.addEventListener('click', (e) => {
     case 'dismiss-since': saveVisit(); sinceSnap = null; render(); break;
     case 'new-init': newInitiative(); break;
     case 'new-dep': newDependency(); break;
-    case 'decide': closeDrawer(); recordDecision(id); break;
+    case 'decide': recordDecision(id); break;
     case 'request-decision': requestDecision(); break;
     case 'preread': openPreread(id); break;
     case 'copy-preread': { const m = state.cadence.find((x) => x.id === id); navigator.clipboard?.writeText(prereadText(m.preread)).then(() => toast('Pre-read copied'), () => toast('Copy not available here')); break; }
-    case 'edit-metric': closeDrawer(); editMetric(id); break;
-    case 'resolve-metric': closeDrawer(); resolveMetric(id); break;
+    case 'edit-metric': editMetric(id); break;
+    case 'resolve-metric': resolveMetric(id); break;
     case 'verify-metric': { const m = state.metrics.find((x) => x.kr === id); m.lastVerified = state.meta.asOf; commit('Marked verified'); if (document.body.classList.contains('drawer-open')) openKr(id); break; }
     case 'new-obj': editObjective(); break;
     case 'edit-obj': editObjective(id); break;
@@ -815,7 +823,7 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.dataset.action === 'toggle-action') { const c = state.commitments.find((x) => x.id === t.dataset.id); c.status = t.checked ? 'done' : 'open'; commit(t.checked ? 'Marked done' : 'Reopened'); openKr(t.dataset.kr); return; }
+  if (t.dataset.action === 'toggle-action') { const c = state.commitments.find((x) => x.id === t.dataset.id); c.status = t.checked ? 'done' : 'open'; commit(t.checked ? 'Marked done' : 'Reopened'); return; }
   if (t.dataset.action === 'checkin-person') { checkinPerson = t.value; render(); }
   if (t.id === 'profile') { switchProfile(t.value); return; }
   if (t.dataset.action === 'risk-status') { const r = state.risks.find((x) => x.id === t.dataset.id); r.status = t.value; commit('Status updated'); }
