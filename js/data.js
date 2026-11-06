@@ -378,7 +378,7 @@ function makeCadence(coo, ceo) {
 
 const PROFILES = {
   b2b: {
-    label: 'B2B software company',
+    label: 'B2B software company', short: 'B2B software',
     seed: SEED, extra: KR_EXTRA, commitments: SEED_COMMITMENTS, initiatives: SEED_INITIATIVES, deps: SEED_DEPS, history: SEED_HISTORY,
     metrics: B2B_METRICS, metricOverrides: B2B_METRIC_OVERRIDES, decisionDetail: B2B_DECISIONS, cadence: () => makeCadence('ml', 'dw'),
     decisions: [
@@ -410,12 +410,14 @@ function buildDemo(profileId) {
   s.krs = s.krs.map((k) => {
     const n = k.conf.length;
     const checkins = [];
+    let prevG = 0;
     for (let i = 0; i < n; i++) {
       const t = (i + 1) / n;
       const f = Math.pow(t, k.curve || 1);
-      // small deterministic wobble so the history doesn't look machine-made
-      const wobble = i < n - 1 ? Math.sin((k.id.length + i) * 1.7) * 0.04 * (k.current - k.start) : 0;
-      const value = roundTo(k.start + (k.current - k.start) * f + wobble, k.dp);
+      // small deterministic variation, kept moving in one direction so history looks real
+      let g = i < n - 1 ? Math.min(1, Math.max(0, f + Math.sin((k.id.length * 3 + i) * 1.3) * 0.05 * t)) : 1;
+      g = Math.max(g, prevG); prevG = g;
+      const value = roundTo(k.start + (k.current - k.start) * g, k.dp);
       checkins.push({ date: DEMO_CHECKIN_DATES[i], value, confidence: k.conf[i], note: k.notes[n - 1 - i] || '', by: k.owner });
     }
     const out = { ...k, checkins };

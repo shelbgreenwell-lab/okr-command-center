@@ -56,8 +56,19 @@ const Engine = {
     let level = progress >= 1 ? 0 : Math.max(pace, conf);
     const status = ['on', 'risk', 'off'][level];
 
-    // Linear forecast: if the current rate holds, where do we land?
-    const projected = e > 0 ? Math.min(1.5, progress / e) : 0;
+    // Forecast: blend the quarter-to-date pace with the last two weeks' pace, then
+    // discount the remaining gain by owner confidence (full credit at 7/10 or above).
+    const weeksTotal = Engine.totalWeeks(state);
+    const wkEl = Math.max(0.5, e * weeksTotal), wkLeft = Math.max(0, weeksTotal - wkEl);
+    const r1 = progress / wkEl;
+    let r2 = r1;
+    if (last && kr.checkins.length >= 3) {
+      const a = kr.checkins[kr.checkins.length - 3];
+      const span = Math.max(0.5, Engine.daysBetween(a.date, last.date) / 7);
+      r2 = (progress - Engine.progressOf(kr, a.value)) / span;
+    }
+    const rate = Math.max(0, (r1 + r2) / 2);
+    const projected = progress >= 1 ? progress : Math.min(1.25, progress + rate * wkLeft * Math.min(1, confidence / 7));
     const projectedValue = kr.start + (kr.target - kr.start) * projected;
 
     const openRisks = state.risks.filter((r) => r.kr === kr.id && r.status !== 'closed');
@@ -74,7 +85,6 @@ const Engine = {
     if (stale) reasons.push(`no check-in for ${daysSince} days`);
     if (openRisks.some((r) => r.severity === 'high')) reasons.push('high-severity blocker open');
     const mh = noDeps ? null : Engine.metricHealth(state, kr);
-    if (mh && mh.status === 'discrepancy') reasons.push('data sources disagree');
     if (upstream.length) reasons.push(`waiting on ${upstream.map((d) => d.onKr || U.team(state, d.fromTeam).name).join(', ')}`);
 
     const attention = level * 3 + (stale ? 2 : 0) + (confDelta <= -2 ? 1 : 0)

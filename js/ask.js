@@ -77,7 +77,10 @@ const Ask = {
     const H = (k) => Engine.kr(state, k);
     const items = (list) => list.map((k) => k.id);
     const label = scope.label;
-    const out = (text, ids = [], follow = []) => ({ text, items: ids, followups: follow, source: 'local' });
+    const INTENT_LABEL = { attention: 'what needs attention', decisions: 'decisions waiting', status: 'what is behind', stale: 'missing check-ins', blockers: 'blockers', movers: 'what changed', forecast: 'a forecast', wins: 'what is going well', why: 'an explanation', summary: 'a summary', mitigate: 'how to recover', money: 'value at risk', commitments: 'commitments', deps: 'dependencies', resources: 'people and budget', history: 'goal-setting history', metrics: 'which numbers to trust', cadence: 'upcoming meetings', velocity: 'decision speed', since: 'what changed recently' };
+    const about = scope.person ? scope.person.name : scope.team ? scope.team.name : scope.krs ? (scope.krs.length === 1 ? scope.krs[0].title : scope.krs.length + ' related key results') : 'the whole company';
+    const reading = (intents.length ? intents.slice(0, 2).map((i) => INTENT_LABEL[i]).join(' + ') : 'a status update') + ' · about ' + about;
+    const out = (text, ids = [], follow = []) => ({ text, items: ids, followups: follow, source: 'local', reading });
 
     if (intents[0] === 'metrics' || (intents.includes('metrics') && !scope.krs)) {
       const I = Engine.integrity(state);
@@ -188,7 +191,7 @@ const Ask = {
       const up = m.filter((x) => x.h.delta > 0.02).sort((a, b) => b.h.delta - a.h.delta).slice(0, 4);
       const conf = m.filter((x) => x.h.confDelta < 0).sort((a, b) => a.h.confDelta - b.h.confDelta).slice(0, 4);
       let t = `**Since last week${label ? ' in ' + label : ''}:**\n`;
-      if (up.length) t += '\nBiggest gains:\n' + up.map((x) => `- ${x.k.title}: +${Math.round(x.h.delta * 100)} pts, now ${U.fmt(x.k, x.h.value)}`).join('\n');
+      if (up.length) t += '\nMoved the most toward target:\n' + up.map((x) => { const pv = Engine.prevCheckin(x.k); return `- ${x.k.title}: ${pv ? U.fmt(x.k, pv.value) + ' → ' : ''}${U.fmt(x.k, x.h.value)} (target ${U.fmt(x.k, x.k.target)})`; }).join('\n');
       if (conf.length) t += '\n\nConfidence dropped:\n' + conf.map((x) => `- ${x.k.title}: ${x.h.confidence + -x.h.confDelta} → ${x.h.confidence}/10 (${U.person(state, x.k.owner).name})`).join('\n');
       if (!up.length && !conf.length) t += 'Little movement this week.';
       return out(t, items([...conf, ...up].map((x) => x.k)), ['Why did confidence drop?', 'What needs my attention this week?']);
@@ -202,7 +205,7 @@ const Ask = {
           const verdict = h.projected >= 1 ? 'on course to hit target' : h.projected >= 0.8 ? 'likely to land close but short' : 'not on course to hit target';
           return `**${k.title}**: at the current rate it lands around **${U.fmt(k, h.projectedValue)}** vs a target of ${U.fmt(k, k.target)} — ${verdict}. Owner confidence is ${h.confidence}/10.${h.reasons.length ? ' Watch: ' + h.reasons.join(', ') + '.' : ''}`;
         }).join('\n\n');
-        return out(t + '\n\nForecast is a straight-line projection of progress to date, so it under-reads back-loaded work.', items(krs));
+        return out(t + '\n\nThe forecast blends the pace so far with the last two weeks, discounted by the owner\'s confidence.', items(krs));
       }
       const hit = list.filter((x) => x.h.projected >= 1), miss = list.filter((x) => x.h.projected < 0.8).sort((a, b) => a.h.projected - b.h.projected);
       return out(`At the current pace, **${hit.length} of ${list.length}** key results${label ? ' in ' + label : ''} would hit target by quarter end and **${miss.length}** would land below 80% of target:\n${miss.map((x) => `- ${x.k.title}: projected ${U.fmt(x.k, x.h.projectedValue)} vs ${U.fmt(x.k, x.k.target)}`).join('\n')}`, items(miss.map((x) => x.k)));
@@ -226,10 +229,10 @@ const Ask = {
       }
       const sev = { high: 0, medium: 1, low: 2 };
       rs.sort((a, b) => sev[a.severity] - sev[b.severity]);
-      if (!rs.length) return out(`No open blockers${label ? ' on ' + label : ''}.`);
+      if (!rs.length) return out(`No open blockers${label ? (label === 'this area' ? ' in this area' : ' on ' + label) : ''}.`);
       const lines = rs.slice(0, 6).map((r) => `- **${r.title}** (${r.severity}) — ${r.impact} Owner: ${U.person(state, r.owner).name}.${r.decision && !r.decided ? ' Needs decision: ' + r.decision + '.' : ''}${scope.krs && !scope.krs.some((k) => k.id === r.kr) ? ' (upstream: ' + r.kr + ')' : ''}`);
       const theme = Ask.theme(rs);
-      return out(`**${rs.length} open blocker${rs.length > 1 ? 's' : ''}${label ? ' on ' + label : ''}.**${theme ? ' ' + theme : ''}\n${lines.join('\n')}`, [...new Set(rs.map((r) => r.kr))], ['Which decisions are waiting on me?']);
+      return out(`**${rs.length} open blocker${rs.length > 1 ? 's' : ''}${label ? (label === 'this area' ? ' in this area' : ' on ' + label) : ''}.**${theme ? ' ' + theme : ''}\n${lines.join('\n')}`, [...new Set(rs.map((r) => r.kr))], ['Which decisions are waiting on me?']);
     }
 
     // Why / tell me about a specific thing
@@ -249,6 +252,10 @@ const Ask = {
     // Scoped summary (person, team, objective, topic)
     if (scope.krs) return out(Ask.summarize(state, scope.krs, label, scope), items(scope.krs.filter((k) => H(k).status !== 'on')), ['What is blocking them?', 'What changed since last week?']);
 
+    // Nothing recognised: say so rather than guess.
+    if (!intents.length && !scope.krs && !scope.person && !scope.team) {
+      return { text: 'I\'m not sure what you\'re asking. I can answer questions about goals, blockers, decisions, commitments, dependencies, resources, data quality and meetings. Try one of these, or name a team, person or goal:', items: [], followups: Ask.suggestions.slice(0, 6), source: 'local', reading: 'not recognised' };
+    }
     // Default: attention brief
     return out(Ask.brief(state), items(P.attention.slice(0, 5).map((x) => x.kr)), ['Which decisions are waiting on me?', 'What changed since last week?', 'Who hasn\'t checked in?']);
   },

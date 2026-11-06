@@ -251,3 +251,49 @@ function resolveMetric(krId) {
     commit('Metric certified');
   }, { submit: 'Certify' });
 }
+
+function openBriefModal() {
+  $('#modal').innerHTML = `<div class="modal-card wide"><div class="modal-h"><div><h2>Weekly exec brief</h2><div class="muted small">Pre-read for the weekly business review · generated from this week's check-ins</div></div><button class="icon-btn" data-action="close-modal" aria-label="Close">✕</button></div>
+    <div class="modal-b memo inmodal">${memoHtml(briefText())}</div>
+    <div class="modal-f"><span></span><div class="row"><button class="btn" data-action="copy-brief">Copy text</button><button class="btn" data-action="print-brief">Print</button><button class="btn primary" data-action="close-modal">Done</button></div></div></div>`;
+  document.body.classList.add('modal-open');
+}
+
+/* ---------------- Guided tour ---------------- */
+let tourStep = -1;
+const TOUR = [
+  { route: 'overview', sel: '.hero', title: 'Start with what needs you', text: 'The overview leads with the few goals that need an executive this week, how much value is at risk, and what is waiting on a decision. Everything else is a click away.' },
+  { route: 'overview', open: 'top', sel: '#drawer .suggest', title: 'Every slipping goal explains itself', text: 'Why it is flagged, the value at risk, how the number is measured, and suggested next steps chosen from what is actually wrong. Add any step to a recovery plan in one click.' },
+  { route: 'risks', sel: '.dcard', title: 'Decisions are records, not hallway calls', text: 'Each decision waiting on an executive has context, options, a recommendation, a decider and a needed-by date. Recording it captures what was chosen and why. Decision speed is tracked like any other metric.' },
+  { route: 'metrics', sel: 'tr.mh-discrepancy', title: 'Numbers you can trust', text: 'Every number on the scorecard has a definition, a source, an owner and a last-verified date. When two systems disagree, it is flagged before anyone acts on it.' },
+  { route: 'cadence', sel: '.wkstrip', title: 'Meetings as one system', text: 'Weekly staff decides, the weekly review covers only what is off track, the monthly review certifies the numbers, the quarterly review scores and resets. Click any meeting for a pre-read that writes itself.' },
+  { route: 'board', sel: '.board', title: 'The quarter on one page', text: 'The same live data, formatted for a board pack. That is the tour — try Ask, or switch to the other demo company from the top bar.' },
+];
+function tourPrompt() {
+  let seen = false; try { seen = !!localStorage.getItem('okr-tour-seen'); } catch (e) {}
+  if (seen || tourStep >= 0) return '';
+  return `<div class="tour-prompt"><span><b>New here?</b> Take the 2-minute tour of how this runs an executive team.</span><span class="row"><button class="btn sm primary" data-action="tour-start">Start the tour</button><button class="btn sm ghost" data-action="tour-dismiss">No thanks</button></span></div>`;
+}
+function tourStart() { try { localStorage.setItem('okr-tour-seen', '1'); } catch (e) {} tourGo(0); }
+function tourGo(i) {
+  if (i < 0 || i >= TOUR.length) return tourEnd();
+  tourStep = i;
+  const st = TOUR[i];
+  closeModal(); closeDrawer();
+  if (route() !== st.route) location.hash = '#/' + st.route; else render();
+  setTimeout(() => {
+    if (st.open === 'top') { const t = Engine.portfolio(state).attention[0]; if (t) openKr(t.kr.id); }
+    document.querySelectorAll('.tour-hl').forEach((e) => e.classList.remove('tour-hl'));
+    const el = document.querySelector(st.sel);
+    if (el) { el.classList.add('tour-hl'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    let box = document.getElementById('tour'); if (!box) { box = document.createElement('div'); box.id = 'tour'; document.body.appendChild(box); }
+    box.innerHTML = `<div class="tour-k">Step ${i + 1} of ${TOUR.length}</div><h3>${esc(st.title)}</h3><p>${esc(st.text)}</p>
+      <div class="row tour-f"><button class="btn sm ghost" data-action="tour-end">End tour</button><span class="row">${i ? '<button class="btn sm" data-action="tour-prev">Back</button>' : ''}<button class="btn sm primary" data-action="tour-next">${i === TOUR.length - 1 ? 'Finish' : 'Next'}</button></span></div>`;
+  }, 120);
+}
+function tourEnd() {
+  tourStep = -1;
+  const box = document.getElementById('tour'); if (box) box.remove();
+  document.querySelectorAll('.tour-hl').forEach((e) => e.classList.remove('tour-hl'));
+  render();
+}

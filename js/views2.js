@@ -14,13 +14,11 @@ function sinceBanner() {
   if (!sinceSnap) return '';
   const d = Engine.diff(state, sinceSnap);
   const when = sinceSnap.firstVisit ? 'last week' : 'you last looked';
-  if (d.empty) return '';
+  if (!d.worse.length && !d.better.length && !d.newRisks.length) return '';
   const li = [];
   d.worse.forEach((x) => li.push(`<li><span class="st-${x.to}-t sm">${STATUS_ICON[x.to]}</span> <a href="#" data-action="kr" data-id="${x.k.id}">${esc(x.k.title)}</a> slipped from ${STATUS_LABEL[x.from].toLowerCase()} to <b>${STATUS_LABEL[x.to].toLowerCase()}</b></li>`));
   d.better.forEach((x) => li.push(`<li><span class="st-${x.to}-t sm">${STATUS_ICON[x.to]}</span> <a href="#" data-action="kr" data-id="${x.k.id}">${esc(x.k.title)}</a> improved to <b>${STATUS_LABEL[x.to].toLowerCase()}</b></li>`));
   d.newRisks.forEach((r) => li.push(`<li>⚑ New blocker: ${lk('risk', r.id, esc(r.title))} <span class="muted">(${esc(r.severity)})</span></li>`));
-  d.newDecisions.forEach((x) => li.push(`<li>✓ Decided: ${lk('decision', x.id, esc(x.title))}</li>`));
-  d.newlyDone.forEach((c) => li.push(`<li>✓ Commitment done: ${lk('commitment', c.id, esc(c.text))} <span class="muted">(${esc(U.person(state, c.owner).name)})</span></li>`));
   return `<section class="card since"><div class="card-h"><h2>Since ${when}${sinceSnap.firstVisit ? '' : ' · ' + U.date(sinceSnap.at.slice(0, 10))}</h2><button class="btn sm ghost" data-action="dismiss-since">Mark as seen</button></div><ul class="plain compact">${li.slice(0, 8).join('')}</ul></section>`;
 }
 
@@ -76,7 +74,9 @@ function viewReview() {
       <div class="card"><div class="card-h"><h2>Other open commitments</h2></div>${others.map(crow).join('') || '<p class="muted">None.</p>'}</div>
     </div>
     <div>
-      <div class="card"><div class="card-h"><h2>Today's agenda</h2><a href="#/brief" class="small">Full brief →</a></div><ul class="agenda">${agendaHtml}</ul></div>
+      <div class="card"><div class="card-h"><h2>Today's agenda</h2></div><ul class="agenda">${agendaHtml}</ul>
+        <div class="row gap0 mt4"><button class="btn sm primary" data-action="open-brief">Read the weekly brief</button><button class="btn sm" data-action="copy-brief">Copy brief</button></div>
+        <p class="muted tiny mt4">The brief is written from this week's check-ins and goes out before the meeting as the pre-read.</p></div>
       <div class="card"><div class="card-h"><h2>Capture a commitment</h2></div>
         <form data-form="commit" class="stack">
           <label>What will be done<input name="text" required placeholder="e.g. Bring two staffing options to Friday's staff meeting"/></label>
@@ -93,6 +93,9 @@ function viewReview() {
 }
 
 /* ---------------- Initiatives & resources ---------------- */
+function viewResources() {
+  return viewInitiatives() + viewDeps(true) + `<p class="muted small">Looking for how well teams set goals over time? See <a href="#/history">quarter history</a>.</p>`;
+}
 function viewInitiatives() {
   const R = Engine.resources(state);
   const maxF = Math.max(...R.rows.map((r) => r.fte), R.unaligned.fte, 1);
@@ -111,8 +114,8 @@ function viewInitiatives() {
   const unc = R.uncovered.map((k) => { const h = Engine.kr(state, k); return `<li>${pill(h.status)} <a href="#" data-action="kr" data-id="${k.id}">${esc(k.title)}</a> <span class="muted small">· ${esc(U.person(state, k.owner).name)}</span></li>`; }).join('');
   const offFunded = R.rows.map((r) => ({ r, s: Engine.objective(state, r.obj) })).filter((x) => x.s.status !== 'on');
   return `
-  <header class="page-h"><div><h1>Initiatives & resources</h1><p class="muted">The funded work behind the numbers. Shows where people and money go, which key results have no plan behind them, and which work isn't tied to any goal.</p></div>
-  <button class="btn primary" data-action="new-init">+ Initiative</button></header>
+  <header class="page-h"><div><h1>Resources & dependencies</h1><p class="muted">Is the work set up to succeed? Where people and money go, which goals have nothing funded behind them, which work isn't tied to any goal, and who is waiting on whom.</p></div>
+  <div class="row"><button class="btn" data-action="new-dep">+ Dependency</button><button class="btn" data-action="new-init">+ Initiative</button></div></header>
   <section class="kpis small4">
     <div class="kpi"><div class="kpi-label">People on initiatives</div><div class="kpi-val">${R.totalFte.toFixed(1)}</div><div class="kpi-sub">FTE</div></div>
     <div class="kpi"><div class="kpi-label">Initiative budget</div><div class="kpi-val">${fmtK(R.totalBudget)}</div><div class="kpi-sub">this quarter</div></div>
@@ -124,11 +127,12 @@ function viewInitiatives() {
       ${offFunded.length ? `<p class="small callout-plain">${offFunded.map((x) => `<b>${x.r.obj.id}</b> is ${STATUS_LABEL[x.s.status].toLowerCase()} with ${x.r.fte.toFixed(1)} FTE`).join('; ')}. ${R.unaligned.fte ? `Meanwhile ${R.unaligned.fte} FTE sit on work tied to no objective.` : ''}</p>` : ''}</div>
     <div class="card"><div class="card-h"><h2>Key results with no funded work</h2></div><ul class="plain compact">${unc || '<li class="muted">Every key result has an initiative.</li>'}</ul></div>
   </section>
+  <div class="sec-h big"><h2>Initiatives</h2><span class="muted small">The funded work behind each goal</span></div>
   <div class="card flush"><div class="table-wrap"><table class="risks"><thead><tr><th>Initiative</th><th>Drives</th><th>Owner</th><th>FTE</th><th>Budget</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 /* ---------------- Dependencies ---------------- */
-function viewDeps() {
+function viewDeps(embedded) {
   const deps = (state.deps || []).map((d) => Engine.dep(state, d));
   const teams = state.teams;
   const byProvider = {};
@@ -145,6 +149,9 @@ function viewDeps() {
   const cell = (need, give) => { const list = deps.filter((d) => d.fromTeam === give.id && U.workTeam(state, state.krs.find((k) => k.id === d.kr)).name === need.name && !d.delivered); if (!list.length) return '<td class="mx-empty">·</td>'; const r = list.filter((d) => d.risk).length; return `<td class="mx ${r ? 'mx-risk' : ''}" data-tip="${esc(list.map((d) => d.need).join(' · '))}">${list.length}${r ? `<small> (${r}⚠)</small>` : ''}</td>`; };
   const matrix = `<table class="simple matrix"><thead><tr><th>Needs ↓ / from →</th>${used.map((t) => `<th>${esc(t.name)}</th>`).join('')}</tr></thead><tbody>${used.map((n) => `<tr><th>${teamLk(n.id)}</th>${used.map((g) => cell(n, g)).join('')}</tr>`).join('')}</tbody></table>`;
   const late = deps.filter((d) => d.late).length, risk = deps.filter((d) => d.risk && !d.late).length;
+  if (embedded) return `<div class="sec-h big"><h2>Dependencies</h2><span class="muted small">${deps.filter((d) => !d.delivered).length} open · ${late} late · ${risk} at risk because the work they rely on is behind</span></div>
+  <section class="card"><div class="card-h"><h2>Who is waiting on whom</h2><span class="muted small">Count of open asks · ⚠ = late or at risk</span></div><div class="table-wrap">${matrix}</div></section>
+  <section class="grid2">${groups}</section>`;
   return `
   <header class="page-h"><div><h1>Dependencies</h1><p class="muted">Who is waiting on whom. A dependency is flagged when it is past due or when the work it relies on is itself behind — so one team's slip shows up before it lands on another.</p></div>
   <button class="btn primary" data-action="new-dep">+ Dependency</button></header>
@@ -182,7 +189,7 @@ function viewHistory() {
       <ul><li><span class="tag good">Healthy stretch</span> averages 0.6–0.9: ambitious targets, mostly delivered.</li>
       <li><span class="tag warn">Targets may be too safe</span> 0.9+ every quarter: the team is likely sandbagging. Ask for a bigger number.</li>
       <li><span class="tag warn">Slightly over-ambitious</span> 0.5–0.6: fine for one quarter, a problem if it persists.</li>
-      <li><span class="tag bad">Over-committing or under-resourced</span> below 0.5: targets and capacity don't match. Check <a href="#/initiatives">resources</a>.</li></ul></div>
+      <li><span class="tag bad">Over-committing or under-resourced</span> below 0.5: targets and capacity don't match. Check <a href="#/resources">resources</a>.</li></ul></div>
   </section>
   <div class="card flush"><div class="table-wrap"><table class="simple hist"><thead><tr><th>Team</th>${H.quarters.map((q) => `<th>${esc(q)}</th>`).join('')}<th>${esc(curQ)} <span class="muted tiny">projected</span></th><th>Pattern (past quarters)</th></tr></thead>
   <tbody>${rows}<tr class="total"><th>Company</th>${H.company.map((v) => cell(v)).join('')}${cell(projCo, true)}<td><span class="tag ${coCal.tone}">${coCal.label}</span></td></tr></tbody></table></div></div>`;
@@ -218,7 +225,7 @@ function viewBoard() {
     <div class="board-h"><div><div class="muted small">${esc(state.meta.company)} · Board update</div><h2>${esc(q.label)} OKR review</h2></div><div class="muted small">As of ${U.date(state.meta.asOf, { month: 'long', day: 'numeric', year: 'numeric' })}</div></div>
     <h3>Headline</h3><ul>${headline.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
     <h3>Company objectives</h3>
-    <table class="simple"><thead><tr><th>Objective</th><th>Status</th><th>Progress</th><th>Proj. score</th><th>Value at risk</th><th>% of people</th></tr></thead><tbody>${objRows}</tbody></table>
+    <div class="table-wrap"><table class="simple"><thead><tr><th>Objective</th><th>Status</th><th>Progress</th><th>Proj. score</th><th>Value at risk</th><th>% of people</th></tr></thead><tbody>${objRows}</tbody></table></div>
     <div class="board-cols">
       <div><h3>Largest value at risk</h3><ul>${topExp.map((x) => `<li><b>${fmtK(x.h.exposure)}</b> — ${krLk(x.kr.id)} <span class="muted">(${STATUS_LABEL[x.h.status].toLowerCase()})</span></li>`).join('')}</ul></div>
       <div><h3>Top risks</h3><ul>${risks.map((x) => `<li><b>${lk('risk', x.r.id, esc(x.r.title), 'plain-lk')}.</b> ${esc(x.r.impact)} <span class="muted">Response: ${esc(x.r.mitigation)}</span></li>`).join('')}</ul></div>

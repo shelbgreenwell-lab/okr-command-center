@@ -124,20 +124,22 @@ document.addEventListener('mouseout', (e) => { if (e.target.closest('[data-tip]'
 
 /* ---------------- Views ---------------- */
 const VIEWS = {
-  overview: { label: 'Executive overview', icon: '◧', render: viewOverview, group: 'Run the quarter' },
+  overview: { label: 'Overview', icon: '◧', render: viewOverview, group: 'Run the quarter' },
   okrs: { label: 'OKRs & alignment', icon: '⌥', render: viewOkrs },
   checkin: { label: 'Weekly check-in', icon: '✓', render: viewCheckin },
   review: { label: 'Weekly review', icon: '↻', render: viewReview },
+  risks: { label: 'Decisions & blockers', icon: '⚑', render: viewRisks },
   cadence: { label: 'Operating cadence', icon: '▦', render: viewCadence },
-  risks: { label: 'Risks & decisions', icon: '⚑', render: viewRisks },
-  initiatives: { label: 'Initiatives & resources', icon: '▤', render: viewInitiatives, group: 'Plan & govern' },
-  deps: { label: 'Dependencies', icon: '⇄', render: viewDeps },
-  history: { label: 'Quarter history', icon: '◷', render: viewHistory },
-  metrics: { label: 'Metric definitions', icon: '≡', render: viewMetrics },
-  brief: { label: 'Weekly exec brief', icon: '☰', render: viewBrief, group: 'Report' },
-  board: { label: 'Board one-pager', icon: '▣', render: viewBoard },
+  metrics: { label: 'Metric definitions', icon: '≡', render: viewMetrics, group: 'Govern' },
+  resources: { label: 'Resources', icon: '▤', render: viewResources },
+  board: { label: 'Board one-pager', icon: '▣', render: viewBoard, group: 'Report' },
   ask: { label: 'Ask', icon: '✦', render: viewAsk },
-  method: { label: 'How it works', icon: 'ⓘ', render: viewMethod, group: ' ' },
+  // Reachable by link, not in the menu
+  method: { label: 'How it works', render: viewMethod, hidden: true },
+  history: { label: 'Quarter history', render: viewHistory, hidden: true },
+  brief: { label: 'Weekly exec brief', render: viewBrief, hidden: true },
+  initiatives: { label: 'Resources & dependencies', render: viewResources, hidden: true },
+  deps: { label: 'Resources & dependencies', render: viewResources, hidden: true },
 };
 
 function route() { const h = location.hash.replace(/^#\/?/, '').split('?')[0]; return VIEWS[h] ? h : 'overview'; }
@@ -145,13 +147,13 @@ function route() { const h = location.hash.replace(/^#\/?/, '').split('?')[0]; r
 function render() {
   const r = route();
   const q = Engine.quarter(state);
-  const overdueN = Engine.commitments(state).overdue.length;
-  const discN = Engine.integrity(state).counts.discrepancy;
-  $('#nav').innerHTML = Object.entries(VIEWS).map(([k, v]) =>
-    `${v.group ? `<div class="nav-group">${v.group}</div>` : ''}<a href="#/${k}" class="${k === r ? 'active' : ''}"><span class="nav-icon" aria-hidden="true">${v.icon}</span>${v.label}${k === 'risks' && Engine.pendingDecisions(state).length ? `<span class="badge">${Engine.pendingDecisions(state).length}</span>` : ''}${k === 'review' && overdueN ? `<span class="badge">${overdueN}</span>` : ''}${k === 'metrics' && discN ? `<span class="badge">${discN}</span>` : ''}</a>`).join('');
-  const ps = $('#profile'); if (ps) ps.innerHTML = Object.entries(PROFILES).map(([id, p]) => `<option value="${id}" ${id === state.meta.profile ? 'selected' : ''}>Demo: ${esc(p.label)}</option>`).join('');
+  const decN = Engine.pendingDecisions(state).length;
+  const active = VIEWS[r].hidden && ['initiatives', 'deps'].includes(r) ? 'resources' : r;
+  $('#nav').innerHTML = Object.entries(VIEWS).filter(([, v]) => !v.hidden).map(([k, v]) =>
+    `${v.group ? `<div class="nav-group">${v.group}</div>` : ''}<a href="#/${k}" class="${k === active ? 'active' : ''}"><span class="nav-icon" aria-hidden="true">${v.icon}</span>${v.label}${k === 'risks' && decN ? `<span class="badge">${decN}</span>` : ''}</a>`).join('');
+  const ps = $('#profile'); if (ps) ps.innerHTML = Object.entries(PROFILES).map(([id, p]) => `<option value="${id}" ${id === state.meta.profile ? 'selected' : ''}>Demo: ${esc(p.short || p.label)}</option>`).join('');
   $('#company').textContent = state.meta.company;
-  $('#qpill').innerHTML = `${esc(q.label)} · Week ${Engine.week(state)} of ${Engine.totalWeeks(state)}`;
+  $('#qpill').innerHTML = `${esc(q.label)} · <span class="wk-long">Week </span><span class="wk-short">Wk </span>${Engine.week(state)}/${Engine.totalWeeks(state)}`;
   $('#asof').textContent = 'Data as of ' + U.date(state.meta.asOf, { month: 'short', day: 'numeric', year: 'numeric' });
   const main = $('#main');
   main.innerHTML = VIEWS[r].render();
@@ -160,55 +162,41 @@ function render() {
   document.title = VIEWS[r].label + ' · OKR Command Center';
 }
 
-function askBar(placeholder) {
+function askBar(placeholder, n = 3) {
   return `<form class="askbar" data-form="ask">
     <span class="askbar-icon" aria-hidden="true">✦</span>
     <input name="q" autocomplete="off" placeholder="${esc(placeholder || 'Ask anything — e.g. “What needs my attention this week?”')}" aria-label="Ask a question about the OKRs"/>
     <button class="btn primary" type="submit">Ask</button>
   </form>
-  <div class="chips">${Ask.suggestions.slice(0, 4).map((s) => `<button class="chip" data-action="ask" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+  <div class="chips">${Ask.suggestions.slice(0, n).map((s) => `<button class="chip" data-action="ask" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+}
+
+function attnCard(x) {
+  const sg = Suggest.forKr(state, x.kr)[0];
+  return `<button class="attn" data-action="kr" data-id="${x.kr.id}">
+    <div class="attn-top">${pill(x.h.status)}<span class="muted small">${x.h.exposure ? `<b class="money">${fmtK(x.h.exposure)} at risk</b> · ` : ''}${esc(U.workTeam(state, x.kr).name)}</span></div>
+    <div class="attn-title">${esc(x.kr.title)}</div>
+    <div class="attn-why">${esc(x.h.reasons.join(' · ') || 'Behind pace')}</div>
+    ${sg ? `<div class="attn-next"><span aria-hidden="true">→</span> ${esc(sg.title)}</div>` : ''}
+    <div class="attn-foot">${avatar(state, x.kr.owner, 'sm')}<span>${esc(U.person(state, x.kr.owner).name)}</span><span class="muted">${U.fmt(x.kr, x.h.value)} → ${U.fmt(x.kr, x.kr.target)}</span></div>
+  </button>`;
 }
 
 function viewOverview() {
   const P = Engine.portfolio(state);
-  const gap = P.progress - P.expected;
-  const kpi = (label, val, sub, cls = '', action = '') =>
-    `<div class="kpi ${cls}" ${action}><div class="kpi-label">${label}</div><div class="kpi-val">${val}</div><div class="kpi-sub">${sub}</div></div>`;
+  const needs = P.attention.filter((x) => x.h.status !== 'on');
+  const top = needs.slice(0, 3);
+  const C = P.commitments;
+  const q = Engine.quarter(state);
+  const stat = (label, val, sub, tip, action = '') => `<div class="hstat ${action ? 'link' : ''}" ${action} data-tip="${esc(tip)}"><div class="hstat-v">${val}</div><div class="hstat-l">${label}</div>${sub ? `<div class="hstat-s">${sub}</div>` : ''}</div>`;
 
-  const attention = P.attention.slice(0, 5).map((x) => `
-    <button class="attn" data-action="kr" data-id="${x.kr.id}">
-      <div class="attn-top">${pill(x.h.status)}<span class="muted small">${x.h.exposure ? `<b class="money">${fmtK(x.h.exposure)} at risk</b> · ` : ''}${esc(U.workTeam(state, x.kr).name)}</span></div>
-      <div class="attn-title">${esc(x.kr.title)}</div>
-      <div class="attn-why">${esc(x.h.reasons.join(' · ') || 'Behind pace')}</div>
-      ${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? `<div class="attn-next"><span aria-hidden="true">→</span> ${esc(sg.title)}</div>` : ''; })()}
-      <div class="attn-foot">${avatar(state, x.kr.owner, 'sm')}<span>${esc(U.person(state, x.kr.owner).name)}</span><span class="muted">${U.fmt(x.kr, x.h.value)} → ${U.fmt(x.kr, x.kr.target)}</span></div>
-    </button>`).join('');
-
-  const decisions = P.decisions.map((d) => `
+  const decisions = P.decisions.slice(0, 4).map((d) => `
     <div class="decision">
-      <div><div class="decision-title">${lk('risk', d.id, esc(d.decision))}</div>
-      <div class="muted small">Waiting ${d.age} days · decider ${esc(U.person(state, d.decisionOwner).name)} · unblocks <a href="#" data-action="kr" data-id="${d.kr}">${esc(d.kr)}</a></div></div>
+      <div><div class="decision-title">${lk('risk', d.id, esc(d.decision), 'plain-lk')}</div>
+      <div class="muted small">${d.age} days waiting · ${esc(U.person(state, d.decisionOwner).name)} decides</div></div>
       <button class="btn sm" data-action="decide" data-id="${d.id}">Record decision</button>
-    </div>`).join('') || '<p class="muted">No decisions waiting. Nice.</p>';
-  const recentDec = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3)
-    .map((d) => `<li><span class="muted small">${U.date(d.date)}</span> ${lk('decision', d.id, esc(d.title))}</li>`).join('');
-
-  const trend = Engine.trend(state, state.krs);
-  const wk = Engine.totalWeeks(state);
-  const chart = lineChart({
-    series: [
-      { name: 'Actual progress', cls: 's1', pts: trend, dot: true },
-      { name: 'Expected pace', cls: 'sref', dash: true, pts: [[0, 0], [wk, 1]] },
-    ], xMax: wk, xLabel: (i) => 'W' + i, yFmt: (v) => U.pct(v), height: 230,
-  });
-
-  const teams = state.teams.filter((t) => t.id !== 'co').map((t) => ({ t, s: Engine.team(state, t.id) }));
-  const teamBars = teams.map(({ t, s }) => {
-    const st = s.counts.off ? 'off' : s.counts.risk ? 'risk' : 'on';
-    return `<div class="trow"><div class="trow-name">${teamLk(t.id)}</div>
-      ${progressBar(s.progress, P.expected, st, `${t.name}: ${U.pct(s.progress)} complete · ${s.counts.on} on track, ${s.counts.risk} at risk, ${s.counts.off} off track`)}
-      <div class="trow-val">${U.pct(s.progress)}</div></div>`;
-  }).join('');
+    </div>`).join('') || '<p class="muted small">No decisions waiting.</p>';
+  const overdue = C.overdue.slice(0, 3).map((c) => `<li>${lk('commitment', c.id, esc(c.text))}<div class="muted small">${esc(U.person(state, c.owner).name)} · due ${U.date(c.due)}</div></li>`).join('');
 
   const companyObjs = state.objectives.filter((o) => !o.parent).map((o) => {
     const s = Engine.objective(state, o);
@@ -223,40 +211,40 @@ function viewOverview() {
   }).join('');
 
   return `
-  <header class="page-h"><div><h1>Good morning. Here's where the quarter stands.</h1>
-  <p class="muted">${esc(state.meta.company)} · ${esc(state.meta.tagline)}</p></div></header>
+  ${tourPrompt()}
+  <section class="hero">
+    <div class="hero-k">${esc(state.meta.company)} · ${esc(q.label)}, week ${Engine.week(state)} of ${Engine.totalWeeks(state)}</div>
+    <h1>${top.length ? `${top.length} goal${top.length > 1 ? 's' : ''} need${top.length > 1 ? '' : 's'} you this week` : 'Nothing needs you this week'}</h1>
+    <p class="hero-sub">${P.counts.off} off track and ${P.counts.risk} at risk out of ${P.all.length} key results, with <b>${fmtK(P.exposure)}</b> of value at risk. ${P.decisions.length ? `${P.decisions.length} decision${P.decisions.length > 1 ? 's are' : ' is'} waiting on executives.` : ''}</p>
+    <div class="hstats">
+      ${stat('Key results', `<span class="st-on-t sm">●</span>${P.counts.on} <span class="st-risk-t sm">▲</span>${P.counts.risk} <span class="st-off-t sm">■</span>${P.counts.off}`, P.stale.length ? `${P.stale.length} without a recent check-in` : 'all checked in', 'On track / at risk / off track. Status uses pace against the calendar and the owner\'s confidence — whichever is worse.', 'data-action="nav" data-to="okrs"')}
+      ${stat('Value at risk', fmtK(P.exposure), `${P.all.filter((x) => x.h.exposure > 0).length} key results`, 'Value at stake × the share of target we are on course to miss, for at-risk and off-track key results.', 'data-action="nav" data-to="board"')}
+      ${stat('Decisions waiting', P.decisions.length, P.decisions.length ? `oldest ${P.decisions[0].age} days` : '', 'Executive decisions that are blocking work, oldest first.', 'data-action="nav" data-to="risks"')}
+      ${stat('Follow-through', U.pct(C.rate), C.overdue.length ? `${C.overdue.length} commitments overdue` : 'nothing overdue', 'Share of commitments that came due and were done.', 'data-action="nav" data-to="review"')}
+    </div>
+  </section>
   ${askBar()}
   ${sinceBanner()}
-  <section class="kpis k4">
-    ${kpi('Quarter progress', U.pct(P.progress), `vs ${U.pct(P.expected)} expected · <b class="${gap >= -0.05 ? 'good' : 'bad'}">${gap >= 0 ? '+' : ''}${Math.round(gap * 100)} pts</b>`)}
-    ${kpi('Value at risk', fmtK(P.exposure), `across ${P.all.filter((x) => x.h.exposure > 0).length} slipping key results`, 'link', 'data-action="nav" data-to="board"')}
-    ${kpi('On track', `<span class="st-on-t">●</span> ${P.counts.on}`, `of ${P.all.length} key results`)}
-    ${kpi('At risk', `<span class="st-risk-t">▲</span> ${P.counts.risk}`, 'need a plan')}
-    ${kpi('Off track', `<span class="st-off-t">■</span> ${P.counts.off}`, 'need intervention')}
-    ${kpi('Decisions waiting', P.decisions.length, P.decisions.length ? `oldest ${P.decisions[0].age} days` : 'none', 'link', 'data-action="nav" data-to="risks"')}
-    ${kpi('Overdue commitments', P.commitments.overdue.length, `follow-through ${U.pct(P.commitments.rate)}`, 'link', 'data-action="nav" data-to="review"')}
-    ${kpi('Stale check-ins', P.stale.length, `no update in ${STALE_DAYS}+ days`, 'link', 'data-action="nav" data-to="checkin"')}
+  <section class="grid2 wide-left">
+    <div class="card"><div class="card-h"><h2>Needs you this week</h2>${needs.length > 3 ? `<a href="#" class="small" data-action="see-behind">All ${needs.length} slipping →</a>` : ''}</div>
+      <div class="attn-list">${top.map(attnCard).join('') || '<p class="muted">Everything is on track.</p>'}</div></div>
+    <div>
+      <div class="card"><div class="card-h"><h2>Decisions waiting</h2><a href="#/risks" class="small">All →</a></div>${decisions}</div>
+      <div class="card"><div class="card-h"><h2>Overdue commitments</h2><a href="#/review" class="small">Weekly review →</a></div>${overdue ? `<ul class="plain compact">${overdue}</ul>` : '<p class="muted small">Nothing overdue.</p>'}</div>
+    </div>
   </section>
-  <section class="grid2">
-    <div class="card"><div class="card-h"><h2>Needs your attention</h2><span class="muted small">Ranked by stakes, pace, confidence and blockers</span></div><div class="attn-list">${attention}</div></div>
-    <div class="card"><div class="card-h"><h2>Decisions waiting on executives</h2><a href="#/risks" class="small">All risks →</a></div>${decisions}
-      ${recentDec ? `<div class="recent-dec"><h3 style="margin-top:0">Recently decided</h3><ul class="plain">${recentDec}</ul></div>` : ''}</div>
-  </section>
-  <section class="grid2">
-    <div class="card"><div class="card-h"><h2>Progress vs. expected pace</h2><span class="muted small">All key results, averaged</span></div>${chart}</div>
-    <div class="card"><div class="card-h"><h2>Progress by team</h2><span class="muted small">Tick = where we should be today</span></div><div class="tbars">${teamBars}</div>
-    <div class="legend"><span><i class="sw st-on"></i>On track</span><span><i class="sw st-risk"></i>At risk</span><span><i class="sw st-off"></i>Off track</span><span><i class="sw tick"></i>Expected today</span></div></div>
-  </section>
-  <section><div class="sec-h"><h2>Company objectives</h2><a href="#/okrs" class="small">Full alignment map →</a></div><div class="objgrid">${companyObjs}</div></section>`;
+  <section><div class="sec-h"><h2>Company objectives</h2><a href="#/okrs" class="small">Alignment map →</a></div><div class="objgrid">${companyObjs}</div></section>`;
 }
 
 /* ---- OKRs ---- */
 let okrFilter = { team: '', status: '', owner: '', q: '' };
+let okrCompact = typeof window !== 'undefined' && window.innerWidth < 700;
 function viewOkrs() {
   const f = okrFilter;
   const matchKr = (k) => {
     const h = Engine.kr(state, k);
-    if (f.status && h.status !== f.status && !(f.status === 'stale' && h.stale)) return false;
+    if (f.status === 'behind') { if (h.status === 'on') return false; }
+    else if (f.status && h.status !== f.status && !(f.status === 'stale' && h.stale)) return false;
     if (f.owner && k.owner !== f.owner) return false;
     if (f.q && !(k.title + ' ' + U.obj(state, k.obj).title).toLowerCase().includes(f.q.toLowerCase())) return false;
     return true;
@@ -289,7 +277,7 @@ function viewOkrs() {
           <div class="obj-prog">${progressBar(s.progress, s.expected, s.status)}</div><span>${U.pct(s.progress)}</span>${pill(s.status)}
           <span class="obj-actions"><button class="btn sm ghost" data-action="new-kr" data-id="${o.id}">+ Key result</button><button class="btn sm ghost" data-action="edit-obj" data-id="${o.id}">Edit</button></span></div>
       </div>
-      <div class="krs">${krs.map(krRow).join('') || '<div class="muted small pad">No key results match the filters.</div>'}</div>` : ''}
+      ${okrCompact ? '' : `<div class="krs">${krs.map(krRow).join('') || '<div class="muted small pad">No key results match the filters.</div>'}</div>`}` : ''}
       ${kids ? `<div class="children">${kids}</div>` : ''}
     </div>`;
   };
@@ -301,9 +289,10 @@ function viewOkrs() {
   <div class="filters">
     <input type="search" placeholder="Search key results" value="${esc(f.q)}" data-filter="q"/>
     ${sel('team', [['', 'All teams'], ...state.teams.filter((t) => t.id !== 'co').map((t) => [t.id, t.name])], f.team)}
-    ${sel('status', [['', 'Any status'], ['on', 'On track'], ['risk', 'At risk'], ['off', 'Off track'], ['stale', 'Stale']], f.status)}
+    ${sel('status', [['', 'Any status'], ['behind', 'At risk or off track'], ['on', 'On track'], ['risk', 'At risk'], ['off', 'Off track'], ['stale', 'Stale']], f.status)}
     ${sel('owner', [['', 'Any owner'], ...state.people.map((p) => [p.id, p.name])], f.owner)}
     ${(f.team || f.status || f.owner || f.q) ? '<button class="btn sm ghost" data-action="clear-filters">Clear</button>' : ''}
+    <button class="btn sm ghost compact-btn" data-action="okr-compact">${okrCompact ? 'Show key results' : 'Objectives only'}</button>
   </div>
   <div class="tree">${tree || '<p class="muted">Nothing matches.</p>'}</div>`;
 }
@@ -359,8 +348,25 @@ function viewCheckin() {
 
 /* ---- Risks ---- */
 let riskFilter = 'open';
+let riskTab = null;
 function viewRisks() {
+  const pending = Engine.pendingDecisions(state);
+  const tab = riskTab || (pending.length ? 'decisions' : 'blockers');
   const sev = { high: 0, medium: 1, low: 2 };
+  const open = state.risks.filter((r) => r.status !== 'closed');
+  const V = Engine.decisionVelocity(state);
+  const tabs = `<div class="seg tabs"><button class="${tab === 'decisions' ? 'on' : ''}" data-action="risk-tab" data-v="decisions">Decisions <span class="count">${pending.length}</span></button><button class="${tab === 'blockers' ? 'on' : ''}" data-action="risk-tab" data-v="blockers">Blockers <span class="count">${open.length}</span></button></div>`;
+  const header = `<header class="page-h"><div><h1>Decisions & blockers</h1><p class="muted">Every blocker is tied to the key result it threatens, with an owner and a fix. When the fix is an executive call, it becomes a decision record with options, a recommendation and a decider.</p></div>
+  <div class="row"><button class="btn" data-action="request-decision">+ Request a decision</button><button class="btn" data-action="new-risk">+ Log a blocker</button></div></header>${tabs}`;
+
+  if (tab === 'decisions') {
+    const log = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((d) => `<li><span class="muted small">${U.date(d.date)}</span> <b>${lk('decision', d.id, esc(d.title), 'plain-lk')}</b> <span class="muted small">— ${esc(U.person(state, d.owner).name)}${d.requested ? ' · decided in ' + Engine.daysBetween(d.requested, d.date) + 'd' : ''}</span>${d.rationale ? `<div class="muted small">Why: ${esc(d.rationale)}</div>` : ''}</li>`).join('');
+    return header + `
+    <p class="muted small">Median time to decide: <b>${V.median ?? '—'} days</b> · ${V.within7 != null ? U.pct(V.within7) : '—'} decided within 7 days · ${V.overdue.length ? `<b class="bad">${V.overdue.length} past their needed-by date</b>` : 'none past their needed-by date'}</p>
+    ${pending.length ? `<div class="dgrid">${pending.map(decisionCard).join('')}</div>` : '<div class="card"><p class="muted">No decisions waiting.</p></div>'}
+    <section class="card"><div class="card-h"><h2>Decision log</h2></div><ul class="plain">${log || '<li class="muted">No decisions logged yet.</li>'}</ul></section>`;
+  }
+
   const list = state.risks.filter((r) => riskFilter === 'all' || (riskFilter === 'open' ? r.status !== 'closed' : r.status === riskFilter))
     .sort((a, b) => (a.status === 'closed') - (b.status === 'closed') || sev[a.severity] - sev[b.severity]);
   const rows = list.map((r) => {
@@ -369,30 +375,17 @@ function viewRisks() {
     return `<tr class="${r.status === 'closed' ? 'closed' : ''}">
       <td><span class="sev sev-${r.severity}">${r.severity}</span></td>
       <td><div class="risk-title">${lk('risk', r.id, esc(r.title), 'plain-lk')}</div><div class="muted small">${esc(r.impact)}</div>
-        <div class="small"><b>Mitigation:</b> ${esc(r.mitigation)}</div>
-        ${r.decision ? `<div class="small decision-inline ${r.decided ? 'done' : ''}">${r.decided ? '✓ Decided' : '⚑ Decision needed'}: ${esc(r.decision)} <span class="muted">(${personLk(r.decisionOwner)})</span></div>` : ''}</td>
-      <td>${k ? `<a href="#" data-action="kr" data-id="${k.id}">${k.id}</a><div class="muted tiny">${esc(k.title)}</div>` : '—'}</td>
+        ${r.decision && !r.decided && r.status !== 'closed' ? `<div class="small mt4">${lk('risk', r.id, '⚑ Waiting on a decision')}</div>` : ''}</td>
+      <td>${k ? `<a href="#" data-action="kr" data-id="${k.id}">${esc(k.title)}</a>` : '—'}</td>
       <td>${avatar(state, r.owner, 'sm')} <span class="small">${personLk(r.owner)}</span></td>
       <td class="num">${age}d</td>
-      <td><select data-action="risk-status" data-id="${r.id}">${['open', 'mitigating', 'closed'].map((s) => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
-        ${r.decision && !r.decided && r.status !== 'closed' ? `<button class="btn sm" data-action="decide" data-id="${r.id}">Record decision</button>` : ''}</td>
+      <td><select data-action="risk-status" data-id="${r.id}" aria-label="Status">${['open', 'mitigating', 'closed'].map((s) => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
     </tr>`;
   }).join('');
-  const open = state.risks.filter((r) => r.status !== 'closed');
-  const decisions = state.decisions.slice().sort((a, b) => b.date.localeCompare(a.date)).map((d) => `<li><span class="muted small">${U.date(d.date)}</span> <b>${lk('decision', d.id, esc(d.title), 'plain-lk')}</b> <span class="muted small">— ${esc(U.person(state, d.owner).name)}${d.kr ? ' · ' + d.kr : ''}${d.requested ? ' · decided in ' + Engine.daysBetween(d.requested, d.date) + 'd' : ''}</span>${d.rationale ? `<div class="muted small">Why: ${esc(d.rationale)}</div>` : ''}</li>`).join('');
-  return `
-  <header class="page-h"><div><h1>Risks, blockers & decisions</h1><p class="muted">Every blocker is tied to the key result it threatens, has an owner and a mitigation, and says plainly when an executive decision is the unblock.</p></div>
-  <div class="row"><button class="btn" data-action="request-decision">+ Request a decision</button><button class="btn primary" data-action="new-risk">+ Log a blocker</button></div></header>
-  ${Engine.pendingDecisions(state).length ? `<section><div class="sec-h"><h2>Decisions waiting</h2><a href="#/cadence" class="small">Decision speed →</a></div><div class="dgrid">${Engine.pendingDecisions(state).map(decisionCard).join('')}</div></section>` : ''}
-  <section class="kpis small4">
-    <div class="kpi"><div class="kpi-label">Open</div><div class="kpi-val">${open.length}</div></div>
-    <div class="kpi"><div class="kpi-label">High severity</div><div class="kpi-val">${open.filter((r) => r.severity === 'high').length}</div></div>
-    <div class="kpi"><div class="kpi-label">Decisions waiting</div><div class="kpi-val">${Engine.pendingDecisions(state).length}</div></div>
-    <div class="kpi"><div class="kpi-label">Avg age (open)</div><div class="kpi-val">${open.length ? Math.round(open.reduce((a, r) => a + Engine.daysBetween(r.raised, state.meta.asOf), 0) / open.length) : 0}d</div></div>
-  </section>
+  return header + `
+  <p class="muted small">${open.length} open · ${open.filter((r) => r.severity === 'high').length} high severity · average age ${open.length ? Math.round(open.reduce((a, r) => a + Engine.daysBetween(r.raised, state.meta.asOf), 0) / open.length) : 0} days</p>
   <div class="filters"><div class="seg">${['open', 'mitigating', 'closed', 'all'].map((s) => `<button class="${s === riskFilter ? 'on' : ''}" data-action="risk-filter" data-v="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div></div>
-  <div class="card flush"><div class="table-wrap"><table class="risks"><thead><tr><th>Severity</th><th>Blocker</th><th>Threatens</th><th>Owner</th><th>Age</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">Nothing here.</td></tr>'}</tbody></table></div></div>
-  <section class="card"><div class="card-h"><h2>Decision log</h2></div><ul class="plain">${decisions || '<li class="muted">No decisions logged yet.</li>'}</ul></section>`;
+  <div class="card flush"><div class="table-wrap"><table class="risks"><thead><tr><th>Severity</th><th>Blocker</th><th>Threatens</th><th>Owner</th><th>Age</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">Nothing here.</td></tr>'}</tbody></table></div></div>`;
 }
 
 /* ---- Brief ---- */
@@ -468,7 +461,7 @@ function viewAsk() {
         ${m.items && m.items.length ? `<div class="refs">${m.items.slice(0, 6).map((id) => { const k = state.krs.find((x) => x.id === id); return k ? `<button class="ref" data-action="kr" data-id="${id}">${pill(Engine.kr(state, k).status)} ${esc(k.title)}</button>` : ''; }).join('')}</div>` : ''}
         ${m.note ? `<div class="muted tiny">${esc(m.note)}</div>` : ''}
         ${m.followups && m.followups.length ? `<div class="chips">${m.followups.map((s) => `<button class="chip" data-action="ask" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>` : ''}
-        ${!m.pending ? `<div class="src tiny muted">${m.source === 'claude' ? 'Answered by Claude from live OKR data' : 'Answered by the built-in analyst from live OKR data'}</div>` : ''}
+        ${!m.pending ? `<div class="src tiny muted">${m.source === 'claude' ? 'Answered by Claude from live OKR data' : `Built-in analyst · read as: ${esc(m.reading || '')}`}</div>` : ''}
       </div></div>`).join('');
   const mode = Ask.hasClaude() ? '<span class="tag good">Claude connected</span>' : '<span class="tag">Built-in analyst</span> <a href="#" data-action="settings" class="small">Connect Claude for open-ended questions</a>';
   return `
@@ -518,6 +511,7 @@ function viewMethod() {
     </div>
     <div class="card prose">
       <h2>Operating cadence & decisions</h2>
+      <p>The app has three parts. <b>Run the quarter</b>: overview, OKRs, weekly check-ins, the weekly review (commitments and the brief), decisions and blockers, and the meeting cadence. <b>Govern</b>: metric definitions, and resources and dependencies. <b>Report</b>: the board one-pager and Ask.</p>
       <p>The leadership meetings are designed as one system: weekly exec staff makes decisions, the weekly business review covers only what is off track, the monthly business review certifies the numbers and resourcing, the quarterly review scores the quarter and sets the next, and the offsite sets strategy. Each meeting's pre-read is generated from live data. Every decision request carries context, options, a recommendation, a decider and a needed-by date; recording a decision captures what was chosen and why. Decision speed (median days to decide, share within 7 days) is tracked like any other metric.</p>
       <h2>Metric definitions</h2>
       <p>Every number on the scorecard has a written definition, a source system, an owner, a refresh rate and a last-verified date. A number is <b>trusted</b> when it is defined, verified within its window (7 days for daily metrics, 14 for weekly, 45 for monthly) and every source reporting it agrees within tolerance. When sources disagree, the key result is flagged and the first suggested action is to reconcile before acting.</p>
@@ -808,10 +802,20 @@ document.addEventListener('click', (e) => {
     case 'quick-checkin': quickCheckin(id); break;
     case 'new-risk': newRisk(a.dataset.kr); break;
     case 'risk-filter': riskFilter = a.dataset.v; render(); break;
+    case 'risk-tab': riskTab = a.dataset.v; render(); break;
+    case 'see-behind': okrFilter = { team: '', status: 'behind', owner: '', q: '' }; location.hash = '#/okrs'; break;
+    case 'okr-compact': okrCompact = !okrCompact; render(); break;
+    case 'tour-start': tourStart(); break;
+    case 'tour-next': tourGo(tourStep + 1); break;
+    case 'tour-prev': tourGo(tourStep - 1); break;
+    case 'tour-end': tourEnd(); break;
+    case 'tour-dismiss': try { localStorage.setItem('okr-tour-seen', '1'); } catch (e) {} render(); break;
     case 'clear-filters': okrFilter = { team: '', status: '', owner: '', q: '' }; render(); break;
     case 'settings': settings(); break;
+    case 'open-brief': openBriefModal(); break;
     case 'copy-brief': navigator.clipboard?.writeText(briefText()).then(() => toast('Brief copied'), () => toast('Copy not available here')); break;
     case 'print': window.print(); break;
+    case 'print-brief': { const w = window.open('', '_blank'); if (w) { w.document.write('<title>Weekly brief</title><body style="font-family:system-ui;max-width:760px;margin:40px auto;line-height:1.5">' + memoHtml(briefText()) + '</body>'); w.document.close(); w.print(); } break; }
     case 'export': {
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob); const l = document.createElement('a');

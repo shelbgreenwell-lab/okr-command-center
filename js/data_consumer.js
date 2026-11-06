@@ -2,7 +2,7 @@
    Same quarter and date as the B2B demo; different business model and metrics. */
 
 PROFILES.consumer = {
-  label: 'Consumer app',
+  label: 'Consumer app', short: 'Consumer app',
   seed: {
     meta: { company: 'Lumen', tagline: 'Fictional consumer mobile app · 10M monthly users · 600 employees', asOf: DEMO_AS_OF, quarter: '2026-Q4' },
     quarters: [{ id: '2026-Q4', label: 'Q4 2026', start: '2026-10-01', end: '2026-12-31' }],

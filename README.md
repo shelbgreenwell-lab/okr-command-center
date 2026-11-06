@@ -16,23 +16,18 @@ This tool treats OKRs as an **operating system**, not a document:
 
 | An executive wants to know… | Where it's answered |
 |---|---|
-| Where do we stand, honestly? | **Executive overview** — progress vs. *expected pace*, not just % complete |
-| What deserves my time this week? | **Needs your attention** — ranked by pace, confidence, blockers and stale data |
-| What's waiting on me? | **Decisions waiting** — every exec ask has a decider and ages visibly |
-| How does team work connect to company goals? | **OKRs & alignment** — team objectives ladder to company objectives |
-| What changed and why? | **Weekly check-ins** — number, 1–10 confidence, note, blocker |
-| What do we do about it? | **Suggested actions** — each slipping key result gets concrete next steps based on *why* it's behind, one click to add to a recovery plan |
-| What is it costing us? | **Value at risk** — each slipping key result shows the dollars exposed, and the attention list ranks by stakes |
-| Did people do what they said they'd do? | **Weekly review** — commitments from each review, overdue items, follow-through rate by owner |
-| Is the right work funded? | **Initiatives & resources** — people and budget by objective, key results with no plan behind them, work tied to no goal |
-| Who is waiting on whom? | **Dependencies** — cross-team asks flagged when late or when the upstream work is behind |
-| Are we good at setting goals? | **Quarter history** — past scores by team, labelled too safe / healthy stretch / over-committing |
+| What needs me this week? | **Overview** — the few goals that need an executive, value at risk, decisions waiting, follow-through |
+| How does team work connect to company goals? | **OKRs & alignment** — team objectives ladder to company objectives; every item opens a detail panel |
+| What changed and why? | **Weekly check-in** — number, 1–10 confidence, note, blocker |
+| Did people do what they said they'd do? | **Weekly review** — last week's commitments, overdue items, follow-through by owner, the agenda and the auto-written brief |
+| What's waiting on me? | **Decisions & blockers** — decision records (context, options, recommendation, decider, needed-by) and the blocker log |
+| Is our meeting rhythm working? | **Operating cadence** — weekly staff, weekly review, monthly review, QBR and offsite, each with decision rights and a pre-read that writes itself |
+| Can I trust these numbers? | **Metric definitions** — definition, source, owner and last-verified date for every number; flagged when systems disagree |
+| Is the work set up to succeed? | **Resources** — people and budget by objective, goals with no funded work, work tied to no goal, and who is waiting on whom |
 | What goes in the board pack? | **Board one-pager** — the quarter on one printable page |
-| Can I trust these numbers? | **Metric definitions** — every scorecard number has a definition, source, owner and last-verified date; flagged when two systems disagree |
-| Is our meeting rhythm working? | **Operating cadence** — weekly staff, weekly business review, monthly business review, QBR and offsite, each with purpose, decision rights and an auto-generated pre-read |
-| How fast do we decide? | **Decision records** — context, options, recommendation, decider and needed-by date; median time to decide tracked like any metric |
-| What do I read before the WBR? | **Weekly exec brief** — written automatically, with a time-boxed agenda |
-| Can I just ask? | **Ask** — plain-English questions answered from live data |
+| Can I just ask? | **Ask** — plain-English questions answered from live data, showing how each question was read |
+
+New visitors get a **2-minute guided tour** (six stops) from the overview or the sidebar.
 
 ## Design decisions
 
@@ -61,9 +56,9 @@ The exact rules are in the app under **How it works**, so anyone can audit why s
 
 ## Try it in two minutes
 
-1. Open the demo and read the **Executive overview**. Switch demo companies from the top bar.
-2. In **Ask**, try *"Why is integration build time off track?"* or *"Which decisions are waiting on me?"*
-3. Click **Mark decided** on a decision, then check the badge and decision log.
+1. Open the demo and take the **2-minute tour**, or read the **Overview**. Switch demo companies from the top bar.
+2. In **Ask**, try *"Why is critical bug resolution off track?"* or *"Which decisions are waiting on me?"*
+3. In **Decisions & blockers**, click **Record decision**, pick an option and say why — it moves to the decision log with the time it took.
 4. Open **Operating cadence** and click a meeting to see its pre-read; open **Metric definitions** and resolve a number where sources disagree.
 5. Open **Weekly review** and close out an overdue commitment, then check **Board one-pager**.
 6. Go to **Weekly check-in**, change a number and confidence, submit — every view updates.
