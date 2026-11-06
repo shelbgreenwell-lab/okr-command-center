@@ -13,6 +13,8 @@ const U = {
   person(state, id) { return state.people.find((p) => p.id === id) || { name: 'Unassigned', title: '' }; },
   team(state, id) { return state.teams.find((t) => t.id === id) || { name: '—' }; },
   obj(state, id) { return state.objectives.find((o) => o.id === id); },
+  /* Team doing the work: the objective's team, or the owner's team for company-level KRs. */
+  workTeam(state, kr) { const o = U.obj(state, kr.obj); const tid = o && o.team !== 'co' ? o.team : U.person(state, kr.owner).team; return U.team(state, tid); },
   krTeam(state, kr) { const o = U.obj(state, kr.obj); return o ? U.team(state, o.team) : { name: '—' }; },
   date(s, opts) {
     return Engine.d(s).toLocaleDateString('en-US', opts || { month: 'short', day: 'numeric' });

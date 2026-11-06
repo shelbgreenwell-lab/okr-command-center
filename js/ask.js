@@ -23,6 +23,12 @@ const SYNONYMS = {
 };
 
 const INTENTS = [
+  { id: 'since', re: /since (i|my) last|what'?s new|catch me up|did i miss/ },
+  { id: 'money', re: /\$|dollar|value (is )?at risk|how much .*(at risk|at stake)|exposure|cost us|at stake|how much (money|revenue|is)|financial impact|worth/ },
+  { id: 'commitments', re: /commit|follow.?through|overdue|promised|said (they|he|she) would|action items?|accountab/ },
+  { id: 'deps', re: /depend|upstream|downstream|waiting on (another|other|which) team|who is waiting|cross.?team|handoff/ },
+  { id: 'resources', re: /initiative|project|budget|headcount|\bfte\b|resourc|staff(ed|ing)|funding|funded|spend|where (are )?(our )?people/ },
+  { id: 'history', re: /history|last quarter|previous quarter|past quarters|sandbag|calibrat|too (safe|easy|ambitious)|track record|good at setting/ },
   { id: 'mitigate', re: /suggest|mitigat|what should (we|i) do|how (do|can) we (fix|recover|get)|recover|back on track|options|next steps?|action plan|what can we do/ },
   { id: 'attention', re: /attention|focus on|priorit|worry about|top (3|three|things)|what should i|most important|keep me up/ },
   { id: 'decisions', re: /decision|decide|approv|need from me|waiting on me|my call|sign.?off|unblock|what do you need/ },
@@ -45,6 +51,11 @@ const Ask = {
     'What changed since last week?',
     'Who hasn\'t checked in?',
     'How do we get bookings back on track?',
+    'How much value is at risk?',
+    'What commitments are overdue?',
+    'Who is waiting on another team?',
+    'Where are our people and budget going?',
+    'Are our targets too safe or too ambitious?',
     'How is Operations doing?',
     'What is blocking customer success?',
   ],
@@ -74,6 +85,63 @@ const Ask = {
     const items = (list) => list.map((k) => k.id);
     const label = scope.label;
     const out = (text, ids = [], follow = []) => ({ text, items: ids, followups: follow, source: 'local' });
+
+    if (intents[0] === 'since') {
+      const snap = typeof sinceSnap !== 'undefined' && sinceSnap ? sinceSnap : Engine.lastWeekSnapshot(state);
+      const d = Engine.diff(state, snap);
+      if (d.empty) return out('Nothing material has changed since ' + (snap.firstVisit ? 'last week' : 'you last looked') + '.');
+      const L = [];
+      d.worse.forEach((x) => L.push(`- **${x.k.title}** slipped to ${STATUS_LABEL[x.to].toLowerCase()}`));
+      d.better.forEach((x) => L.push(`- ${x.k.title} improved to ${STATUS_LABEL[x.to].toLowerCase()}`));
+      d.newRisks.forEach((r) => L.push(`- New blocker: ${r.title}`));
+      d.newDecisions.forEach((x) => L.push(`- Decided: ${x.title}`));
+      d.newlyDone.forEach((c) => L.push(`- Done: ${c.text} (${U.person(state, c.owner).name})`));
+      return out(`**Since ${snap.firstVisit ? 'last week' : 'you last looked'}:**\n${L.join('\n')}`, items([...d.worse, ...d.better].map((x) => x.k)), ['What needs my attention this week?']);
+    }
+
+    if (intents[0] === 'money' || (intents.includes('money') && !scope.krs)) {
+      const list = krs.map((k) => ({ k, h: H(k) })).filter((x) => x.h.exposure > 0).sort((a, b) => b.h.exposure - a.h.exposure);
+      const total = list.reduce((a, x) => a + x.h.exposure, 0);
+      if (!list.length) return out(`No value is at risk${label ? ' in ' + label : ''} — nothing there is behind.`);
+      return out(`**${fmtK(total)} of value is at risk${label ? ' in ' + label : ''}** across ${list.length} key result${list.length > 1 ? 's' : ''}. Largest first:\n${list.slice(0, 5).map((x) => `- **${fmtK(x.h.exposure)}** — ${x.k.title} (${STATUS_LABEL[x.h.status].toLowerCase()}). ${x.k.stakeNote || ''}`).join('\n')}\n\nValue at risk = value at stake × the share of target we're projected to miss at today's pace.`, items(list.slice(0, 5).map((x) => x.k)), ['How do we get bookings back on track?']);
+    }
+
+    if (intents.includes('commitments')) {
+      const C = Engine.commitments(state);
+      let od = C.overdue; if (scope.person) od = od.filter((c) => c.owner === scope.person.id);
+      if (scope.krs && !scope.person) od = od.filter((c) => scope.krs.some((k) => k.id === c.kr));
+      const worst = C.byOwner.filter((o) => o.rate !== null && o.overdue).sort((a, b) => a.rate - b.rate)[0];
+      let t = `**Follow-through is ${U.pct(C.rate)}**: of the commitments that have come due, that share was done. ${od.length ? `**${od.length} overdue${label ? ' for ' + label : ''}:**` : 'Nothing is overdue' + (label ? ' for ' + label : '') + '.'}\n`;
+      t += od.map((c) => `- ${c.text} — ${U.person(state, c.owner).name}, due ${U.date(c.due)}${c.kr ? ' (' + c.kr + ')' : ''}`).join('\n');
+      if (worst && !scope.person) t += `\n\nLowest follow-through: ${U.person(state, worst.owner).name} at ${U.pct(worst.rate)}.`;
+      return out(t, [...new Set(od.map((c) => c.kr).filter(Boolean))], ['Which decisions are waiting on me?']);
+    }
+
+    if (intents.includes('deps')) {
+      let ds = (state.deps || []).map((d) => Engine.dep(state, d)).filter((d) => !d.delivered);
+      if (scope.krs) ds = ds.filter((d) => scope.krs.some((k) => k.id === d.kr || k.id === d.onKr));
+      if (scope.team) ds = ds.filter((d) => d.fromTeam === scope.team.id || U.workTeam(state, state.krs.find((k) => k.id === d.kr)).name === scope.team.name);
+      const risky = ds.filter((d) => d.risk);
+      if (!ds.length) return out('No open cross-team dependencies' + (label ? ' for ' + label : '') + '.');
+      const byTeam = {}; ds.forEach((d) => { byTeam[d.fromTeam] = (byTeam[d.fromTeam] || 0) + 1; });
+      const top = Object.entries(byTeam).sort((a, b) => b[1] - a[1])[0];
+      return out(`**${ds.length} open dependencies, ${risky.length} late or at risk.** Most asks are waiting on ${U.team(state, top[0]).name} (${top[1]}).\n${risky.map((d) => `- ${U.workTeam(state, state.krs.find((k) => k.id === d.kr)).name} needs "${d.need}" from ${U.team(state, d.fromTeam).name} — ${d.label}${d.up ? ', because ' + d.up.title.toLowerCase() + ' is ' + STATUS_LABEL[d.upH.status].toLowerCase() : ''}`).join('\n')}`, [...new Set(risky.flatMap((d) => [d.kr, d.onKr]).filter(Boolean))], ['Why is critical bug resolution off track?']);
+    }
+
+    if (intents.includes('resources')) {
+      const R = Engine.resources(state);
+      const lines = R.rows.map((r) => { const st = Engine.objective(state, r.obj).status; return `- **${r.obj.title}** — ${r.fte.toFixed(1)} FTE (${U.pct(r.fte / R.totalFte)}), ${fmtK(r.budget)}; ${STATUS_LABEL[st].toLowerCase()}`; });
+      lines.push(`- **Not tied to any objective** — ${R.unaligned.fte} FTE (${U.pct(R.unaligned.fte / R.totalFte)}), ${fmtK(R.unaligned.budget)}: ${R.unaligned.inits.map((i) => i.title.toLowerCase()).join(', ')}`);
+      const unc = R.uncovered.filter((k) => H(k).status !== 'on');
+      return out(`**${R.totalFte.toFixed(1)} people and ${fmtK(R.totalBudget)} are on initiatives this quarter:**\n${lines.join('\n')}${unc.length ? `\n\n${unc.length} slipping key result${unc.length > 1 ? 's have' : ' has'} no funded work behind ${unc.length > 1 ? 'them' : 'it'}: ${unc.map((k) => k.title.toLowerCase()).join('; ')}.` : ''}`, items(unc), []);
+    }
+
+    if (intents.includes('history')) {
+      const Hs = state.history; if (!Hs) return out('No quarter history is recorded yet.');
+      const rows = state.teams.filter((t) => t.id !== 'co').map((t) => ({ t, cal: Engine.calibration(Hs.teams[t.id] || []), sc: Hs.teams[t.id] || [] }));
+      const co = Engine.calibration(Hs.company);
+      return out(`**Company scores: ${Hs.company.map((v, i) => Hs.quarters[i] + ' ' + v.toFixed(2)).join(', ')}** — ${co.label.toLowerCase()}. This quarter projects to ${Engine.projectedScore(state, state.krs).toFixed(2)}.\n${rows.map((r) => `- ${r.t.name}: ${r.sc.map((v) => v.toFixed(2)).join(' → ')} — **${r.cal.label.toLowerCase()}**`).join('\n')}`, [], ['Where are our people and budget going?']);
+    }
 
     if (intents.includes('mitigate')) {
       const targets = (scope.krs || P.attention.slice(0, 3).map((x) => x.kr)).filter((k) => Suggest.forKr(state, k).length).slice(0, 3);
@@ -196,8 +264,11 @@ const Ask = {
     const last = Engine.lastCheckin(k);
     let t = `**${k.title}** is **${STATUS_LABEL[h.status].toLowerCase()}**. It sits at ${U.fmt(k, h.value)} against a target of ${U.fmt(k, k.target)} (started at ${U.fmt(k, k.start)}): ${U.pct(h.progress)} of the way there with ${U.pct(h.expected)} of the quarter gone.`;
     if (h.reasons.length) t += ` Signals: ${h.reasons.join(', ')}.`;
+    if (h.exposure) t += ` About **${fmtK(h.exposure)}** of value is at risk (${(k.stakeNote || 'value at stake × projected shortfall').replace(/\.$/, '')}).`;
     if (last && last.note) t += `\n\n${U.person(state, k.owner).name}'s latest update (${U.date(last.date)}): "${last.note}"`;
     if (h.openRisks.length) t += '\n\nOpen blockers:\n' + h.openRisks.map((r) => `- ${r.title} — ${r.mitigation}${r.decision && !r.decided ? ' **Needs decision: ' + r.decision + '.**' : ''}`).join('\n');
+    if (k.leads && k.leads.length) t += '\n\nLeading indicators: ' + k.leads.map((l) => `${l.name.toLowerCase()} ${l.value > l.prev ? 'up' : l.value < l.prev ? 'down' : 'flat'} (${l.prev} → ${l.value}, ${l.value === l.prev ? 'no change' : (l.value > l.prev) === (l.good === 'up') ? 'good' : 'bad'})`).join('; ') + '.';
+    if (h.upstream.length) t += '\n\nWaiting on: ' + h.upstream.map((d) => `"${d.need}" from ${U.team(state, d.fromTeam).name} (${d.label})`).join('; ') + '.';
     const sgs = Suggest.forKr(state, k);
     if (sgs.length) t += '\n\nSuggested actions:\n' + sgs.slice(0, 3).map((sg) => `- **${sg.title}.** ${sg.detail}`).join('\n');
     t += `\n\nAt the current rate it lands near ${U.fmt(k, h.projectedValue)}. Supports "${o.title}".`;
@@ -242,7 +313,7 @@ const Ask = {
     let tokens = q.replace(/[^a-z0-9&\- ]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w) && w.length > 2);
     const expanded = new Set(tokens);
     tokens.forEach((w) => (SYNONYMS[w] || []).forEach((s) => expanded.add(s)));
-    const generic = new Set(['week', 'track', 'risk', 'needs', 'attention', 'quarter', 'target', 'hit', 'changed', 'since', 'last', 'blocking', 'blocked', 'decisions', 'waiting', 'off', 'behind', 'doing', 'going', 'status', 'okrs', 'okr', 'results', 'key', 'objectives', 'checked', 'check', 'hasn', 'update', 'drop', 'confidence', 'wins', 'win', 'customer', 'customers', 'attention', 'working', 'doing', 'how', 'are']);
+    const generic = new Set(['week', 'track', 'risk', 'needs', 'attention', 'quarter', 'target', 'hit', 'changed', 'since', 'last', 'blocking', 'blocked', 'decisions', 'waiting', 'off', 'behind', 'doing', 'going', 'status', 'okrs', 'okr', 'results', 'key', 'objectives', 'checked', 'check', 'hasn', 'update', 'drop', 'confidence', 'wins', 'win', 'customer', 'customers', 'attention', 'value', 'much', 'money', 'overdue', 'commitment', 'commitments', 'committed', 'another', 'team', 'teams', 'other', 'people', 'budget', 'going', 'targets', 'safe', 'ambitious', 'initiatives', 'dependencies', 'following', 'follow', 'through', 'since', 'looked', 'stake', 'worth', 'cost', 'working', 'doing', 'how', 'are']);
     const scored = state.krs.map((k) => {
       const hay = (k.title + ' ' + U.obj(state, k.obj).title).toLowerCase();
       let s = 0;
@@ -270,11 +341,17 @@ const Ask = {
         return { id: k.id, objective: k.obj, title: k.title, owner: U.person(state, k.owner).name, start: U.fmt(k, k.start), target: U.fmt(k, k.target), current: U.fmt(k, h.value),
           progress: U.pct(h.progress), expected: U.pct(h.expected), status: STATUS_LABEL[h.status], confidence: h.confidence, confidenceChange: h.confDelta,
           daysSinceCheckin: h.daysSince, projectedEndValue: U.fmt(k, h.projectedValue), latestNote: last ? last.note : '',
+          valueAtStakeK: k.stake || 0, valueAtRiskK: h.exposure, leadingIndicators: k.leads || [],
           suggestedActions: Suggest.forKr(state, k).map((sg) => sg.title + ': ' + sg.detail), recoveryPlan: (k.actions || []).map((x) => x.title + (x.done ? ' (done)' : '')),
           history: k.checkins.map((c) => c.date + ': ' + U.fmt(k, c.value) + ' conf ' + c.confidence) };
       }),
       risks: state.risks.map((r) => ({ id: r.id, kr: r.kr, title: r.title, severity: r.severity, status: r.status, owner: U.person(state, r.owner).name, raised: r.raised, impact: r.impact, mitigation: r.mitigation, decisionNeeded: r.decided ? null : r.decision || null, decisionOwner: r.decisionOwner ? U.person(state, r.decisionOwner).name : null })),
       decisionLog: state.decisions,
+      valueAtRiskTotalK: Engine.portfolio(state).exposure,
+      commitments: Engine.commitments(state).all.map((c) => ({ text: c.text, owner: U.person(state, c.owner).name, due: c.due, kr: c.kr, status: c.overdue ? 'overdue' : c.status })),
+      initiatives: (state.initiatives || []).map((i) => ({ title: i.title, krs: i.krs, owner: U.person(state, i.owner).name, fte: i.fte, budgetK: i.budget, status: i.status })),
+      dependencies: (state.deps || []).map((d) => { const x = Engine.dep(state, d); return { kr: d.kr, needsFrom: U.team(state, d.fromTeam).name, need: d.need, due: d.due, reliesOn: d.onKr, state: x.label }; }),
+      history: state.history,
       people: state.people.map((p) => p.name + ' — ' + p.title),
     };
   },

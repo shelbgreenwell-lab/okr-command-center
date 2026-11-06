@@ -38,7 +38,7 @@ const Engine = {
   prevCheckin(kr) { return kr.checkins[kr.checkins.length - 2] || null; },
 
   /* Full health read-out for one key result. */
-  kr(state, kr) {
+  kr(state, kr, noDeps) {
     const e = Engine.elapsed(state);
     const last = Engine.lastCheckin(kr);
     const prev = Engine.prevCheckin(kr);
@@ -61,6 +61,11 @@ const Engine = {
     const projectedValue = kr.start + (kr.target - kr.start) * projected;
 
     const openRisks = state.risks.filter((r) => r.kr === kr.id && r.status !== 'closed');
+    // Value at risk: what's at stake × the share we're projected to miss.
+    const shortfall = Math.max(0, Math.min(1, 1 - projected));
+    const exposure = progress >= 1 || level === 0 ? 0 : Math.round((kr.stake || 0) * shortfall);
+    // Upstream dependencies that are late or rest on an off-track key result.
+    const upstream = noDeps ? [] : Engine.depsFor(state, kr.id).filter((d) => d.risk);
     const reasons = [];
     if (pace === 2) reasons.push(`${Math.round(-gap * 100)} pts behind expected pace`);
     else if (pace === 1) reasons.push(`${Math.round(-gap * 100)} pts behind pace`);
@@ -68,12 +73,14 @@ const Engine = {
     if (confDelta <= -2) reasons.push(`confidence fell ${-confDelta} pts`);
     if (stale) reasons.push(`no check-in for ${daysSince} days`);
     if (openRisks.some((r) => r.severity === 'high')) reasons.push('high-severity blocker open');
+    if (upstream.length) reasons.push(`waiting on ${upstream.map((d) => d.onKr || U.team(state, d.fromTeam).name).join(', ')}`);
 
     const attention = level * 3 + (stale ? 2 : 0) + (confDelta <= -2 ? 1 : 0)
-      + openRisks.filter((r) => r.severity === 'high').length * 2 + openRisks.length * 0.5;
+      + openRisks.filter((r) => r.severity === 'high').length * 2 + openRisks.length * 0.5
+      + Math.min(3, exposure / 300) + upstream.length * 0.5;
 
     return { value, progress, prevProgress, delta: progress - prevProgress, confidence, confDelta,
-      expected: e, gap, status, stale, daysSince, projected, projectedValue, openRisks, reasons, attention };
+      expected: e, gap, status, stale, daysSince, projected, projectedValue, openRisks, reasons, attention, exposure, upstream };
   },
 
   objective(state, obj) {
@@ -98,7 +105,9 @@ const Engine = {
     const decisions = Engine.pendingDecisions(state);
     const attention = all.filter((x) => x.h.status !== 'on' || x.h.stale)
       .sort((a, b) => b.h.attention - a.h.attention);
-    return { all, counts, progress, expected: Engine.elapsed(state), stale, openRisks, decisions, attention };
+    const exposure = all.reduce((a, x) => a + x.h.exposure, 0);
+    const commitments = Engine.commitments(state);
+    return { all, counts, progress, expected: Engine.elapsed(state), stale, openRisks, decisions, attention, exposure, commitments };
   },
 
   pendingDecisions(state) {
@@ -135,9 +144,112 @@ const Engine = {
     return { objs, krs, hs, progress, counts };
   },
 
+  /* ---- Dependencies ---- */
+  depsFor(state, krId) {
+    return (state.deps || []).filter((d) => d.kr === krId).map((d) => Engine.dep(state, d));
+  },
+  dependents(state, krId) {
+    return (state.deps || []).filter((d) => d.onKr === krId).map((d) => Engine.dep(state, d));
+  },
+  dep(state, d) {
+    const up = d.onKr ? state.krs.find((k) => k.id === d.onKr) : null;
+    const upH = up ? Engine.kr(state, up, true) : null;
+    const late = !d.delivered && d.due < state.meta.asOf;
+    const upOff = upH && upH.status !== 'on';
+    const state_ = d.delivered ? 'delivered' : late ? 'late' : upOff ? 'at risk' : 'on time';
+    return { ...d, up, upH, late, risk: !d.delivered && (late || upOff), label: state_ };
+  },
+
+  /* ---- Commitments & follow-through ---- */
+  commitments(state) {
+    const all = (state.commitments || []).map((c) => ({ ...c, overdue: c.status === 'open' && c.due < state.meta.asOf }));
+    const open = all.filter((c) => c.status === 'open');
+    const overdue = all.filter((c) => c.overdue);
+    const due = all.filter((c) => c.due <= state.meta.asOf || c.status !== 'open');
+    const done = due.filter((c) => c.status === 'done').length;
+    const rate = due.length ? done / due.length : 1;
+    const byOwner = {};
+    all.forEach((c) => {
+      const o = byOwner[c.owner] = byOwner[c.owner] || { owner: c.owner, done: 0, open: 0, overdue: 0, dropped: 0 };
+      if (c.status === 'done') o.done++; else if (c.status === 'dropped') o.dropped++; else if (c.overdue) o.overdue++; else o.open++;
+    });
+    Object.values(byOwner).forEach((o) => { const d = o.done + o.overdue + o.dropped; o.rate = d ? o.done / d : null; });
+    const reviews = [...new Set(all.map((c) => c.review))].filter(Boolean).sort();
+    return { all, open, overdue, rate, byOwner: Object.values(byOwner), lastReview: reviews.filter((r) => r < state.meta.asOf).pop() || reviews.pop() };
+  },
+
+  /* ---- Initiatives & resources ---- */
+  resources(state) {
+    const inits = state.initiatives || [];
+    const topOf = (krId) => { const k = state.krs.find((x) => x.id === krId); if (!k) return null; let o = state.objectives.find((x) => x.id === k.obj); while (o && o.parent) o = state.objectives.find((x) => x.id === o.parent); return o; };
+    const rows = state.objectives.filter((o) => !o.parent).map((o) => ({ obj: o, fte: 0, budget: 0, inits: [] }));
+    const unaligned = { fte: 0, budget: 0, inits: [] };
+    inits.forEach((i) => {
+      const tops = [...new Set(i.krs.map(topOf).filter(Boolean).map((o) => o.id))];
+      if (!tops.length) { unaligned.fte += i.fte; unaligned.budget += i.budget; unaligned.inits.push(i); return; }
+      tops.forEach((id) => { const r = rows.find((x) => x.obj.id === id); r.fte += i.fte / tops.length; r.budget += i.budget / tops.length; r.inits.push(i); });
+    });
+    const totalFte = inits.reduce((a, i) => a + i.fte, 0), totalBudget = inits.reduce((a, i) => a + i.budget, 0);
+    const uncovered = state.krs.filter((k) => !inits.some((i) => i.krs.includes(k.id)));
+    return { rows, unaligned, totalFte, totalBudget, uncovered };
+  },
+
+  /* ---- Goal-setting calibration ---- */
+  calibration(scores) {
+    const v = scores.filter((x) => x != null);
+    const avg = v.reduce((a, x) => a + x, 0) / (v.length || 1);
+    if (avg >= 0.9) return { avg, label: 'Targets may be too safe', tone: 'warn' };
+    if (avg >= 0.6) return { avg, label: 'Healthy stretch', tone: 'good' };
+    if (avg >= 0.5) return { avg, label: 'Slightly over-ambitious', tone: 'warn' };
+    return { avg, label: 'Over-committing or under-resourced', tone: 'bad' };
+  },
+  projectedScore(state, krs) {
+    if (!krs.length) return null;
+    return krs.reduce((a, k) => a + Math.min(1, Engine.kr(state, k).projected), 0) / krs.length;
+  },
+
+  /* ---- Snapshot for "since you last looked" ---- */
+  snapshot(state) {
+    const krs = {};
+    state.krs.forEach((k) => { const h = Engine.kr(state, k); krs[k.id] = { status: h.status, value: h.value, confidence: h.confidence }; });
+    return { asOf: state.meta.asOf, at: new Date().toISOString(), krs,
+      risks: state.risks.filter((r) => r.status !== 'closed').map((r) => r.id),
+      decisions: state.decisions.map((d) => d.id),
+      done: (state.commitments || []).filter((c) => c.status === 'done').map((c) => c.id) };
+  },
+  /* Baseline for a first visit: the picture as of last week's check-ins. */
+  lastWeekSnapshot(state) {
+    const s = JSON.parse(JSON.stringify(state));
+    const cut = new Date(Engine.d(state.meta.asOf).getTime() - 7 * DAY).toISOString().slice(0, 10);
+    s.meta.asOf = cut;
+    s.krs.forEach((k) => { k.checkins = k.checkins.filter((c) => c.date <= cut); });
+    s.risks = s.risks.filter((r) => r.raised <= cut);
+    s.decisions = s.decisions.filter((d) => d.date <= cut);
+    (s.commitments || []).forEach((c) => { if (c.status === 'done' && c.due > cut) c.status = 'open'; });
+    const snap = Engine.snapshot(s);
+    snap.asOf = cut; snap.firstVisit = true;
+    return snap;
+  },
+  diff(state, snap) {
+    const rank = { on: 0, risk: 1, off: 2 };
+    const better = [], worse = [];
+    state.krs.forEach((k) => {
+      const before = snap.krs[k.id]; if (!before) return;
+      const h = Engine.kr(state, k);
+      if (rank[h.status] < rank[before.status]) better.push({ k, from: before.status, to: h.status });
+      if (rank[h.status] > rank[before.status]) worse.push({ k, from: before.status, to: h.status });
+    });
+    const newRisks = state.risks.filter((r) => r.status !== 'closed' && !snap.risks.includes(r.id));
+    const newDecisions = state.decisions.filter((d) => !snap.decisions.includes(d.id));
+    const newlyDone = (state.commitments || []).filter((c) => c.status === 'done' && !snap.done.includes(c.id));
+    return { better, worse, newRisks, newDecisions, newlyDone, empty: !(better.length + worse.length + newRisks.length + newDecisions.length + newlyDone.length) };
+  },
+
   /* End-of-quarter style score (0.0-1.0), Google-style. */
   score(progress) { return Math.round(Math.min(1, progress) * 10) / 10; },
 };
 
 const STATUS_LABEL = { on: 'On track', risk: 'At risk', off: 'Off track' };
 const STATUS_ICON = { on: '●', risk: '▲', off: '■' };
+
+const fmtK = (k) => k >= 1000 ? '$' + (k / 1000).toFixed(k >= 10000 ? 0 : 1) + 'M' : '$' + Math.round(k) + 'K';

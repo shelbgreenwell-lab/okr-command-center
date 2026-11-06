@@ -1,6 +1,6 @@
 /* App shell: state, routing, views, charts, forms. No framework, no build step. */
 
-const STORE_KEY = 'okr-system-v3';
+const STORE_KEY = 'okr-system-v4';
 let state;
 let askThread = [];
 
@@ -116,13 +116,18 @@ document.addEventListener('mouseout', (e) => { if (e.target.closest('[data-tip]'
 
 /* ---------------- Views ---------------- */
 const VIEWS = {
-  overview: { label: 'Executive overview', icon: '◧', render: viewOverview },
+  overview: { label: 'Executive overview', icon: '◧', render: viewOverview, group: 'Run the quarter' },
   okrs: { label: 'OKRs & alignment', icon: '⌥', render: viewOkrs },
   checkin: { label: 'Weekly check-in', icon: '✓', render: viewCheckin },
+  review: { label: 'Weekly review', icon: '↻', render: viewReview },
   risks: { label: 'Risks & decisions', icon: '⚑', render: viewRisks },
-  brief: { label: 'Weekly exec brief', icon: '☰', render: viewBrief },
+  initiatives: { label: 'Initiatives & resources', icon: '▤', render: viewInitiatives, group: 'Plan & resource' },
+  deps: { label: 'Dependencies', icon: '⇄', render: viewDeps },
+  history: { label: 'Quarter history', icon: '◷', render: viewHistory },
+  brief: { label: 'Weekly exec brief', icon: '☰', render: viewBrief, group: 'Report' },
+  board: { label: 'Board one-pager', icon: '▣', render: viewBoard },
   ask: { label: 'Ask', icon: '✦', render: viewAsk },
-  method: { label: 'How it works', icon: 'ⓘ', render: viewMethod },
+  method: { label: 'How it works', icon: 'ⓘ', render: viewMethod, group: ' ' },
 };
 
 function route() { const h = location.hash.replace(/^#\/?/, '').split('?')[0]; return VIEWS[h] ? h : 'overview'; }
@@ -130,8 +135,9 @@ function route() { const h = location.hash.replace(/^#\/?/, '').split('?')[0]; r
 function render() {
   const r = route();
   const q = Engine.quarter(state);
+  const overdueN = Engine.commitments(state).overdue.length;
   $('#nav').innerHTML = Object.entries(VIEWS).map(([k, v]) =>
-    `<a href="#/${k}" class="${k === r ? 'active' : ''}"><span class="nav-icon" aria-hidden="true">${v.icon}</span>${v.label}${k === 'risks' && Engine.pendingDecisions(state).length ? `<span class="badge">${Engine.pendingDecisions(state).length}</span>` : ''}</a>`).join('');
+    `${v.group ? `<div class="nav-group">${v.group}</div>` : ''}<a href="#/${k}" class="${k === r ? 'active' : ''}"><span class="nav-icon" aria-hidden="true">${v.icon}</span>${v.label}${k === 'risks' && Engine.pendingDecisions(state).length ? `<span class="badge">${Engine.pendingDecisions(state).length}</span>` : ''}${k === 'review' && overdueN ? `<span class="badge">${overdueN}</span>` : ''}</a>`).join('');
   $('#company').textContent = state.meta.company;
   $('#qpill').innerHTML = `${esc(q.label)} · Week ${Engine.week(state)} of ${Engine.totalWeeks(state)}`;
   $('#asof').textContent = 'Data as of ' + U.date(state.meta.asOf, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -159,7 +165,7 @@ function viewOverview() {
 
   const attention = P.attention.slice(0, 5).map((x) => `
     <button class="attn" data-action="kr" data-id="${x.kr.id}">
-      <div class="attn-top">${pill(x.h.status)}<span class="muted small">${esc(U.krTeam(state, x.kr).name)}</span></div>
+      <div class="attn-top">${pill(x.h.status)}<span class="muted small">${x.h.exposure ? `<b class="money">${fmtK(x.h.exposure)} at risk</b> · ` : ''}${esc(U.krTeam(state, x.kr).name)}</span></div>
       <div class="attn-title">${esc(x.kr.title)}</div>
       <div class="attn-why">${esc(x.h.reasons.join(' · ') || 'Behind pace')}</div>
       ${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? `<div class="attn-next"><span aria-hidden="true">→</span> ${esc(sg.title)}</div>` : ''; })()}
@@ -208,16 +214,19 @@ function viewOverview() {
   <header class="page-h"><div><h1>Good morning. Here's where the quarter stands.</h1>
   <p class="muted">${esc(state.meta.company)} · ${esc(state.meta.tagline)}</p></div></header>
   ${askBar()}
-  <section class="kpis">
+  ${sinceBanner()}
+  <section class="kpis k4">
     ${kpi('Quarter progress', U.pct(P.progress), `vs ${U.pct(P.expected)} expected · <b class="${gap >= -0.05 ? 'good' : 'bad'}">${gap >= 0 ? '+' : ''}${Math.round(gap * 100)} pts</b>`)}
+    ${kpi('Value at risk', fmtK(P.exposure), `across ${P.all.filter((x) => x.h.exposure > 0).length} slipping key results`, 'link', 'data-action="nav" data-to="board"')}
     ${kpi('On track', `<span class="st-on-t">●</span> ${P.counts.on}`, `of ${P.all.length} key results`)}
     ${kpi('At risk', `<span class="st-risk-t">▲</span> ${P.counts.risk}`, 'need a plan')}
     ${kpi('Off track', `<span class="st-off-t">■</span> ${P.counts.off}`, 'need intervention')}
     ${kpi('Decisions waiting', P.decisions.length, P.decisions.length ? `oldest ${P.decisions[0].age} days` : 'none', 'link', 'data-action="nav" data-to="risks"')}
+    ${kpi('Overdue commitments', P.commitments.overdue.length, `follow-through ${U.pct(P.commitments.rate)}`, 'link', 'data-action="nav" data-to="review"')}
     ${kpi('Stale check-ins', P.stale.length, `no update in ${STALE_DAYS}+ days`, 'link', 'data-action="nav" data-to="checkin"')}
   </section>
   <section class="grid2">
-    <div class="card"><div class="card-h"><h2>Needs your attention</h2><span class="muted small">Ranked by pace, confidence, blockers and staleness</span></div><div class="attn-list">${attention}</div></div>
+    <div class="card"><div class="card-h"><h2>Needs your attention</h2><span class="muted small">Ranked by stakes, pace, confidence and blockers</span></div><div class="attn-list">${attention}</div></div>
     <div class="card"><div class="card-h"><h2>Decisions waiting on executives</h2><a href="#/risks" class="small">All risks →</a></div>${decisions}
       ${recentDec ? `<div class="recent-dec"><h3 style="margin-top:0">Recently decided</h3><ul class="plain">${recentDec}</ul></div>` : ''}</div>
   </section>
@@ -245,7 +254,7 @@ function viewOkrs() {
     const last = Engine.lastCheckin(k);
     return `<button class="krrow" data-action="kr" data-id="${k.id}">
       <div class="kr-main"><div class="kr-title"><span class="kid-id">${k.id}</span>${esc(k.title)}</div>
-        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(k.actions || []).some((x) => !x.done) ? `<span class="tag good">Plan: ${(k.actions || []).filter((x) => !x.done).length}</span>` : ''}</div></div>
+        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(() => { const n = (state.commitments || []).filter((c) => c.kr === k.id && c.status === 'open').length; return n ? `<span class="tag good">${n} open action${n > 1 ? 's' : ''}</span>` : ''; })()}${h.exposure ? `<span class="money small">${fmtK(h.exposure)} at risk</span>` : ''}</div></div>
       <div class="kr-prog">${progressBar(h.progress, h.expected, h.status)}<div class="kr-vals"><b>${U.fmt(k, h.value)}</b> <span class="muted">of ${U.fmt(k, k.target)}</span></div></div>
       <div class="kr-conf">${confChip(h)}</div>
       <div class="kr-spark">${sparkline(k)}</div>
@@ -378,6 +387,7 @@ function briefText() {
   L.push(`${q.label}, week ${Engine.week(state)} of ${Engine.totalWeeks(state)} · as of ${U.date(state.meta.asOf, { month: 'long', day: 'numeric', year: 'numeric' })}`);
   L.push('');
   L.push(`HEADLINE: ${U.pct(P.progress)} complete vs ${U.pct(P.expected)} expected. ${P.counts.on} on track, ${P.counts.risk} at risk, ${P.counts.off} off track.`);
+  L.push(`VALUE AT RISK: ${fmtK(P.exposure)} across ${P.all.filter((x) => x.h.exposure > 0).length} key results. Commitment follow-through: ${U.pct(P.commitments.rate)} (${P.commitments.overdue.length} overdue).`);
   L.push('');
   L.push('SCORECARD');
   state.objectives.filter((o) => !o.parent).forEach((o) => {
@@ -393,13 +403,18 @@ function briefText() {
   L.push('WHERE WE\'RE SLIPPING');
   P.attention.filter((x) => x.h.status !== 'on').slice(0, 5).forEach((x) => {
     const last = Engine.lastCheckin(x.kr);
-    L.push(`• ${x.kr.title} [${STATUS_LABEL[x.h.status]}]: ${U.fmt(x.kr, x.h.value)} of ${U.fmt(x.kr, x.kr.target)}; ${x.h.reasons.join(', ')}. ${last && last.note ? 'Owner: "' + last.note + '"' : ''}${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? ' Suggested next step: ' + sg.title + '.' : ''; })()}`);
+    L.push(`• ${x.kr.title} [${STATUS_LABEL[x.h.status]}]: ${U.fmt(x.kr, x.h.value)} of ${U.fmt(x.kr, x.kr.target)}; ${x.h.reasons.join(', ')}.${x.h.exposure ? ' ' + fmtK(x.h.exposure) + ' at risk.' : ''} ${last && last.note ? 'Owner: "' + last.note + '"' : ''}${(() => { const sg = Suggest.forKr(state, x.kr)[0]; return sg ? ' Suggested next step: ' + sg.title + '.' : ''; })()}`);
   });
   L.push('');
   L.push('DECISIONS NEEDED');
   if (!P.decisions.length) L.push('• None.');
   P.decisions.forEach((d) => L.push(`• ${d.decision} — decider: ${U.person(state, d.decisionOwner).name}, waiting ${d.age} days. Proposed: ${d.mitigation}`));
   L.push('');
+  if (P.commitments.overdue.length) {
+    L.push('OVERDUE COMMITMENTS');
+    P.commitments.overdue.forEach((c) => L.push(`• ${c.text} — ${U.person(state, c.owner).name}, due ${U.date(c.due)}`));
+    L.push('');
+  }
   if (P.stale.length) {
     L.push('MISSING CHECK-INS');
     P.stale.forEach((x) => L.push(`• ${U.person(state, x.kr.owner).name}: ${x.kr.title} (${x.h.daysSince} days)`));
@@ -407,6 +422,7 @@ function briefText() {
   }
   L.push('PROPOSED WEEKLY BUSINESS REVIEW AGENDA (45 min)');
   L.push('• 5 min — Scorecard read-out (no discussion of green items)');
+  if (P.commitments.overdue.length) L.push(`• 5 min — Close out ${P.commitments.overdue.length} overdue commitment${P.commitments.overdue.length > 1 ? 's' : ''} from last week`);
   P.attention.filter((x) => x.h.status === 'off').slice(0, 2).forEach((x) => L.push(`• 10 min — Deep dive: ${x.kr.title} (${U.person(state, x.kr.owner).name})`));
   if (P.decisions.length) L.push(`• 15 min — Decide: ${P.decisions.slice(0, 3).map((d) => d.decision.toLowerCase()).join('; ')}`);
   L.push('• 5 min — Confirm owners and dates for every action');
@@ -417,6 +433,7 @@ function viewBrief() {
   const html = txt.split('\n').map((l) => {
     const head = l.split(' (')[0];
     if (head.length > 3 && /^[A-Z]/.test(head) && !/[a-z]/.test(head)) return `<h3>${esc(l)}</h3>`;
+    if (l.startsWith('VALUE AT RISK:')) return `<p class="small"><b>Value at risk:</b> ${esc(l.replace('VALUE AT RISK: ', ''))}</p>`;
     if (l.startsWith('HEADLINE:')) return `<p class="headline">${esc(l.replace('HEADLINE: ', ''))}</p>`;
     if (l.startsWith('•')) return `<li>${esc(l.slice(2))}</li>`;
     if (l.startsWith('   ↳')) return `<div class="sub">${esc(l.trim())}</div>`;
@@ -485,6 +502,14 @@ function viewMethod() {
       <p>Status severity, plus weight for stale data, a confidence drop of 2+ points in a week, and open high-severity blockers. The ranking is designed to show an executive the three things worth their time, not everything that is imperfect.</p>
     </div>
     <div class="card prose">
+      <h2>Value at risk</h2>
+      <p>Each key result carries a rough value at stake — what fully hitting it is worth, and how that was sized. Value at risk = value at stake × the share of the target we are projected to miss at today's pace, counted only for key results that are at risk or off track. It turns "25 points behind" into a number an executive can weigh, and it feeds the attention ranking.</p>
+      <h2>Commitments & follow-through</h2>
+      <p>Every weekly review produces commitments with an owner and a date. They stay visible until done or explicitly dropped. Follow-through rate = done ÷ (done + overdue + dropped). Recovery-plan actions count as commitments too.</p>
+      <h2>Initiatives, dependencies, history</h2>
+      <p><b>Initiatives</b> are the funded work behind key results, with people and budget, so you can see whether resources follow priorities and spot work tied to no goal. <b>Dependencies</b> are flagged when late or when the work they rely on is itself behind. <b>Quarter history</b> shows final scores by team and labels the pattern: consistently 0.9+ suggests targets are too safe; below 0.5 suggests over-commitment or under-resourcing.</p>
+      <h2>Leading indicators & since you last looked</h2>
+      <p>Key results are mostly lagging. Leading indicators on each key result show whether the inputs are moving the right way before the outcome does. The overview opens with what changed since your last visit (on a first visit, since last week).</p>
       <h2>Suggested actions</h2>
       <p>Every key result that is at risk, off track or stale gets up to four suggested next steps, chosen from what is actually wrong. For example: a pending decision gets a push to decide, a target out of reach gets a resources/scope/reset call, a confidence drop gets a quick conversation, missing updates get a request for a fresh check-in. Add any suggestion to the key result's recovery plan with one click; it gets the owner and a one-week due date.</p>
       <h2>Ask</h2>
@@ -508,11 +533,11 @@ function suggestionsHtml(k) {
     ${Ask.hasClaude() ? `<button class="btn sm ghost" data-action="ask" data-q="Suggest mitigation actions for ${esc(k.id)}">✦ Ask Claude for more ideas</button>` : ''}</div>`;
 }
 function planHtml(k) {
-  const acts = k.actions || [];
+  const acts = (state.commitments || []).filter((c) => c.kr === k.id && c.status !== 'dropped');
   if (!acts.length) return '';
-  return `<h3>Recovery plan</h3><ul class="plain plan">${acts.map((a, i) => `<li class="${a.done ? 'done' : ''}">
-    <label><input type="checkbox" data-action="toggle-action" data-id="${k.id}" data-i="${i}" ${a.done ? 'checked' : ''}/> <span>${esc(a.title)}</span></label>
-    <div class="muted tiny">${esc(U.person(state, a.owner).name)} · due ${U.date(a.due)}${a.done ? ' · done' : ''}</div></li>`).join('')}</ul>`;
+  return `<h3>Actions & commitments</h3><ul class="plain plan">${acts.map((a) => { const overdue = a.status === 'open' && a.due < state.meta.asOf; return `<li class="${a.status === 'done' ? 'done' : ''}">
+    <label><input type="checkbox" data-action="toggle-action" data-id="${a.id}" data-kr="${k.id}" ${a.status === 'done' ? 'checked' : ''}/> <span>${esc(a.text)}</span>${overdue ? ' <span class="tag bad">Overdue</span>' : ''}</label>
+    <div class="muted tiny">${esc(U.person(state, a.owner).name)} · due ${U.date(a.due)}${a.status === 'done' ? ' · done' : ''}${a.source === 'plan' ? ' · recovery plan' : a.review ? ' · from ' + U.date(a.review) + ' review' : ''}</div></li>`; }).join('')}</ul>`;
 }
 function addDays(iso, n) { const d = Engine.d(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
 
@@ -547,12 +572,16 @@ function openKr(id) {
         <div><span class="muted tiny">Progress</span><b>${U.pct(h.progress)}</b><span class="muted tiny">vs ${U.pct(h.expected)} expected</span></div>
         <div><span class="muted tiny">Confidence</span><b>${h.confidence}/10</b></div>
         <div><span class="muted tiny">Projected end</span><b>${U.fmt(k, h.projectedValue)}</b></div>
+        <div data-tip="${esc(k.stakeNote || 'Set the value at stake in Edit')}"><span class="muted tiny">Value at risk</span><b class="${h.exposure ? 'money' : ''}">${h.exposure ? fmtK(h.exposure) : '—'}</b><span class="muted tiny">of ${fmtK(k.stake || 0)} at stake</span></div>
       </div>
       ${h.reasons.length ? `<div class="callout">Why it's flagged: ${esc(h.reasons.join(' · '))}</div>` : ''}
       ${chart}
       <div class="row gap"><button class="btn primary" data-action="quick-checkin" data-id="${k.id}">Check in</button><button class="btn" data-action="new-risk" data-kr="${k.id}">Log blocker</button><button class="btn" data-action="ask" data-q="Why is ${esc(k.id)} ${h.status === 'on' ? 'on track' : 'behind'}?">Ask about this</button><button class="btn ghost" data-action="edit-kr" data-id="${k.id}">Edit</button></div>
       ${suggestionsHtml(k)}
       ${planHtml(k)}
+      ${leadsHtml(k)}
+      ${depsHtml(k)}
+      ${initsHtml(k)}
       <h3>Blockers</h3>${risks ? `<ul class="plain">${risks}</ul>` : '<p class="muted small">None logged.</p>'}
       <h3>Check-in history</h3><ul class="feed">${hist || '<li class="muted">No check-ins yet.</li>'}</ul>
     </div>`;
@@ -617,8 +646,10 @@ function editKr(id, objId) {
     { name: 'target', label: 'Target', type: 'number', value: k?.target ?? 100, half: true, required: true },
     { name: 'unit', label: 'Unit', type: 'select', options: [['%', 'Percent (%)'], ['$M', 'Dollars ($M)'], [' days', 'Days'], ['', 'Number'], [' / 5', 'Score out of 5']], value: k?.unit ?? '%', half: true },
     { name: 'dp', label: 'Decimals', type: 'select', options: [[0, '0'], [1, '1'], [2, '2']], value: k?.dp ?? 0, half: true },
+    { name: 'stake', label: 'Value at stake ($K)', type: 'number', value: k?.stake ?? 0, half: true, hint: 'What fully hitting this is worth.' },
+    { name: 'stakeNote', label: 'How it was sized', value: k?.stakeNote ?? '', half: true },
   ], (d) => {
-    d.start = +d.start; d.target = +d.target; d.dp = +d.dp; d.dir = d.target >= d.start ? 'up' : 'down';
+    d.start = +d.start; d.target = +d.target; d.dp = +d.dp; d.stake = +d.stake || 0; d.dir = d.target >= d.start ? 'up' : 'down';
     if (k) Object.assign(k, d);
     else state.krs.push({ id: 'KR' + (Math.max(...state.krs.map((x) => +x.id.replace(/\D/g, '') || 0)) + 1), ...d, current: d.start, checkins: [] });
     commit(k ? 'Key result updated' : 'Key result added');
@@ -668,6 +699,29 @@ function newRisk(krId) {
   }, { submit: 'Log blocker' });
 }
 
+function newInitiative() {
+  modal('New initiative', [
+    { name: 'title', label: 'Initiative', required: true, hint: 'The funded work: a project, program or team effort.' },
+    { name: 'kr', label: 'Key result it drives', type: 'select', options: [['', '— None (not tied to a goal) —'], ...krOpts()] },
+    { name: 'team', label: 'Team', type: 'select', options: state.teams.map((t) => [t.id, t.name]), half: true },
+    { name: 'owner', label: 'Owner', type: 'select', options: peopleOpts(), half: true },
+    { name: 'fte', label: 'People (FTE)', type: 'number', value: 1, half: true },
+    { name: 'budget', label: 'Budget ($K)', type: 'number', value: 0, half: true },
+  ], (d) => {
+    state.initiatives.push({ id: U.uid('I'), title: d.title, krs: d.kr ? [d.kr] : [], owner: d.owner, team: d.team, fte: +d.fte || 0, budget: +d.budget || 0, spent: 0, status: 'on' });
+    commit('Initiative added');
+  });
+}
+function newDependency() {
+  modal('New dependency', [
+    { name: 'kr', label: 'Key result that needs something', type: 'select', options: krOpts() },
+    { name: 'need', label: 'What is needed', required: true },
+    { name: 'fromTeam', label: 'From team', type: 'select', options: state.teams.map((t) => [t.id, t.name]), half: true },
+    { name: 'due', label: 'Needed by', type: 'date', value: addDays(state.meta.asOf, 14), half: true },
+    { name: 'onKr', label: 'Their key result it relies on (optional)', type: 'select', options: [['', '— None —'], ...krOpts()] },
+  ], (d) => { state.deps.push({ id: U.uid('X'), ...d, onKr: d.onKr || null }); commit('Dependency added'); });
+}
+
 function settings() {
   let key = ''; try { key = localStorage.getItem('okr-claude-key') || ''; } catch (e) {}
   let model = 'claude-sonnet-5-5'; try { model = localStorage.getItem('okr-claude-model') || model; } catch (e) {}
@@ -704,10 +758,14 @@ document.addEventListener('click', (e) => {
       const k = state.krs.find((x) => x.id === id);
       const sg = Suggest.forKr(state, k)[+a.dataset.i];
       if (!sg) break;
-      k.actions = k.actions || [];
-      k.actions.push({ title: sg.title, kind: sg.kind, owner: k.owner, due: addDays(state.meta.asOf, 7), done: false });
+      state.commitments = state.commitments || [];
+      state.commitments.push({ id: U.uid('C'), text: sg.title, kind: sg.kind, owner: k.owner, due: addDays(state.meta.asOf, 7), kr: k.id, status: 'open', source: 'plan', review: null });
       commit('Added to recovery plan'); openKr(k.id); break;
     }
+    case 'commit-status': { const c = state.commitments.find((x) => x.id === id); c.status = a.dataset.v; commit(a.dataset.v === 'done' ? 'Marked done' : a.dataset.v === 'dropped' ? 'Dropped — kept on record' : 'Reopened'); break; }
+    case 'dismiss-since': saveVisit(); sinceSnap = null; render(); break;
+    case 'new-init': newInitiative(); break;
+    case 'new-dep': newDependency(); break;
     case 'decide': {
       const r = state.risks.find((x) => x.id === id);
       r.decided = true; r.status = 'mitigating';
@@ -730,13 +788,13 @@ document.addEventListener('click', (e) => {
       const url = URL.createObjectURL(blob); const l = document.createElement('a');
       l.href = url; l.download = 'okr-data.json'; l.click(); URL.revokeObjectURL(url); break;
     }
-    case 'reset': state = buildDemo(); askThread = []; closeModal(); commit('Demo data restored'); break;
+    case 'reset': state = buildDemo(); askThread = []; try { localStorage.removeItem(VISIT_KEY); } catch (e) {} loadSince(); closeModal(); commit('Demo data restored'); break;
     case 'menu': document.body.classList.toggle('nav-open'); break;
   }
 });
 document.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.dataset.action === 'toggle-action') { const k = state.krs.find((x) => x.id === t.dataset.id); k.actions[+t.dataset.i].done = t.checked; commit(t.checked ? 'Action done' : 'Action reopened'); openKr(k.id); return; }
+  if (t.dataset.action === 'toggle-action') { const c = state.commitments.find((x) => x.id === t.dataset.id); c.status = t.checked ? 'done' : 'open'; commit(t.checked ? 'Marked done' : 'Reopened'); openKr(t.dataset.kr); return; }
   if (t.dataset.action === 'checkin-person') { checkinPerson = t.value; render(); }
   if (t.dataset.action === 'risk-status') { const r = state.risks.find((x) => x.id === t.dataset.id); r.status = t.value; commit('Status updated'); }
   if (t.dataset.filter && t.tagName === 'SELECT') { okrFilter[t.dataset.filter] = t.value; render(); }
@@ -759,6 +817,10 @@ document.addEventListener('submit', (e) => {
   const d = Object.fromEntries(new FormData(f).entries());
   if (f.dataset.form === 'ask') { runAsk(d.q); return; }
   if (f.dataset.form === 'modal') { closeModal(); modal.onSubmit && modal.onSubmit(d); return; }
+  if (f.dataset.form === 'commit') {
+    state.commitments.push({ id: U.uid('C'), text: d.text, owner: d.owner, due: d.due, kr: d.kr || null, status: 'open', review: state.meta.asOf });
+    commit('Commitment added'); return;
+  }
   if (f.dataset.form === 'checkin') {
     state.krs.filter((k) => k.owner === checkinPerson).forEach((k) => addCheckin(k, +d['v-' + k.id], +d['c-' + k.id], d['n-' + k.id], d['b-' + k.id]));
     commit('Check-in submitted for ' + U.person(state, checkinPerson).name);
@@ -769,4 +831,6 @@ window.addEventListener('hashchange', () => { document.body.classList.remove('na
 
 /* ---------------- Boot ---------------- */
 state = load();
+loadSince();
 render();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !sinceSnap) saveVisit(); });

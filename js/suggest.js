@@ -21,8 +21,8 @@ const Suggest = {
     const multiple = ratePerWeek !== 0 && Math.sign(ratePerWeek) === Math.sign(neededPerWeek) ? neededPerWeek / ratePerWeek : Infinity;
     const fmtRate = (v) => U.fmt({ ...kr, dp: kr.dp + 1 }, Math.abs(v));
     const pendingDecision = h.openRisks.find((r) => r.decision && !r.decided);
-    const plan = kr.actions || [];
-    const has = (kind) => plan.some((a) => a.kind === kind && !a.done);
+    const plan = (state.commitments || []).filter((c) => c.kr === kr.id);
+    const has = (kind) => plan.some((a) => a.kind === kind && a.status === 'open');
 
     // 1. A decision is the unblock
     if (pendingDecision) {
@@ -66,6 +66,26 @@ const Suggest = {
     if (cs.length >= 3 && Math.abs(cs[cs.length - 1].value - cs[cs.length - 3].value) < Math.abs(kr.target - kr.start) * 0.02) {
       add(6, 'unstick', 'Break the stall with one next action',
         `The number has barely moved in two check-ins. Ask ${first} for the single action that would move it by next week, and remove whatever is in the way.`);
+    }
+
+    // 6b. Waiting on another team
+    h.upstream.slice(0, 1).forEach((d) => {
+      const who = d.up ? `${U.person(state, d.up.owner).name} (${d.onKr})` : U.team(state, d.fromTeam).name;
+      add(8, 'dependency', `Unblock the dependency on ${d.onKr || U.team(state, d.fromTeam).name}`,
+        `This needs "${d.need}" from ${who}, ${d.late ? 'which was due ' + U.date(d.due) + ' and is late' : 'whose own work is ' + STATUS_LABEL[d.upH.status].toLowerCase()}. Get both owners in one conversation and agree a delivery date, or find a workaround that doesn't depend on it.`);
+    });
+
+    // 6c. Overdue commitments on this key result
+    const late = plan.filter((c) => c.status === 'open' && c.due < state.meta.asOf);
+    if (late.length) {
+      add(7, 'followup', `Follow up on ${late.length} overdue commitment${late.length > 1 ? 's' : ''}`,
+        `"${late[0].text}" (${U.person(state, late[0].owner).name}) was due ${U.date(late[0].due)}. Get a new date or drop it explicitly — a silent miss teaches the team that commitments are optional.`);
+    }
+
+    // 6d. No funded work behind it
+    if (state.initiatives && !state.initiatives.some((i) => i.krs.includes(kr.id))) {
+      add(5, 'resource', 'Put funded work behind it',
+        `No initiative is linked to this key result, so nobody is explicitly staffed to move it. Name the project and the people, or accept that it won't move.`);
     }
 
     // 7. Stale data

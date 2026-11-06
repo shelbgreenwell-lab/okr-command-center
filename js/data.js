@@ -15,7 +15,7 @@ const SEED = {
     { id: '2026-Q4', label: 'Q4 2026', start: '2026-10-01', end: '2026-12-31' },
   ],
   teams: [
-    { id: 'co', name: 'Company', parent: null },
+    { id: 'co', name: 'Executive team', parent: null },
     { id: 'sales', name: 'Sales', parent: 'co' },
     { id: 'fin', name: 'Finance', parent: 'co' },
     { id: 'cs', name: 'Customer Success', parent: 'co' },
@@ -204,6 +204,111 @@ const SEED = {
   ],
 };
 
+
+/* ---- Extensions: what's at stake, leading indicators, commitments, initiatives,
+   dependencies and quarter history. Kept separate so the core seed stays readable. ---- */
+
+/* stake: $K of value tied to fully hitting the key result. stakeNote: how it was sized.
+   leads: leading indicators — {name, value, prev, good: 'up'|'down', unit}. */
+const KR_EXTRA = {
+  KR1: { stake: 1800, stakeNote: 'Each point of NRR is about $300K of ARR on a $30M base.',
+    leads: [{ name: 'Expansion pipeline', value: 2.1, prev: 1.8, good: 'up', unit: '$M' }] },
+  KR2: { stake: 4200, stakeNote: 'The Q4 bookings target itself.',
+    leads: [{ name: 'Late-stage deals in commit', value: 3.1, prev: 3.6, good: 'up', unit: '$M' }, { name: 'Late-stage deals with an exec sponsor', value: 4, prev: 3, good: 'up', unit: '' }] },
+  KR3: { stake: 1200, stakeNote: 'Each margin point is about $300K of gross profit a quarter.',
+    leads: [{ name: 'Contractor spend per month', value: 410, prev: 430, good: 'down', unit: '$K' }] },
+  KR4: { stake: 1200, stakeNote: 'Pipeline shortfall × 20% historical win rate.',
+    leads: [{ name: 'Marketing-sourced leads per week', value: 42, prev: 61, good: 'up', unit: '' }, { name: 'Partner referrals per week', value: 9, prev: 6, good: 'up', unit: '' }] },
+  KR5: { stake: 900, stakeNote: 'Each win-rate point is about $130K of bookings.' },
+  KR6: { stake: 400, stakeNote: 'Bookings pulled into the quarter by faster cycles.' },
+  KR7: { stake: 300, stakeNote: 'Pricing decisions on the top 20 accounts.' },
+  KR8: { stake: 200, stakeNote: 'Cost of over-hiring or under-hiring against a bad forecast.' },
+  KR9: { stake: 900, stakeNote: 'Each churn point is about $300K of ARR.',
+    leads: [{ name: 'Accounts with a red health score', value: 14, prev: 17, good: 'down', unit: '' }, { name: 'Renewals in next 90 days with no success plan', value: 6, prev: 11, good: 'down', unit: '' }] },
+  KR10: { stake: 600, stakeNote: 'Renewal risk on detractor accounts.',
+    leads: [{ name: 'Critical bugs open over 30 days', value: 11, prev: 8, good: 'down', unit: '' }, { name: 'Support CSAT', value: 4.4, prev: 4.3, good: 'up', unit: ' / 5' }] },
+  KR11: { stake: 500, stakeNote: 'Earlier revenue recognition and lower early churn.' },
+  KR12: { stake: 300, stakeNote: 'Share of churn prevented by early warning.' },
+  KR13: { stake: 1500, stakeNote: 'ARR in accounts currently flagged at risk.',
+    leads: [{ name: 'At-risk accounts with no recovery plan', value: 7, prev: 5, good: 'down', unit: '' }] },
+  KR14: { stake: 200, stakeNote: 'Support-driven churn on smaller accounts.' },
+  KR15: { stake: 1100, stakeNote: 'Renewals tied to committed roadmap features.',
+    leads: [{ name: 'Committed items with dependencies cleared', value: 3, prev: 3, good: 'up', unit: '' }] },
+  KR16: { stake: 800, stakeNote: 'ARR on accounts with an open critical bug.',
+    leads: [{ name: 'New critical bugs per week', value: 5, prev: 4, good: 'down', unit: '' }, { name: 'Engineering hours on incidents per week', value: 120, prev: 60, good: 'down', unit: '' }] },
+  KR17: { stake: 100, stakeNote: 'Management time saved on status gathering.' },
+  KR18: { stake: 150, stakeNote: 'Cost of work stalled while waiting on decisions.' },
+  KR19: { stake: 700, stakeNote: 'Replacement cost of regretted leavers.',
+    leads: [{ name: 'Top performers with a stay interview', value: 100, prev: 64, good: 'up', unit: '%' }] },
+  KR20: { stake: 150, stakeNote: 'Avoided cost of external leadership hires.' },
+  KR21: { stake: 250, stakeNote: 'Premium paid for external leadership hires.' },
+  KR22: { stake: 200, stakeNote: 'Rework and delay from unowned handoffs.' },
+  KR23: { stake: 450, stakeNote: 'Annual license spend on overlapping tools.',
+    leads: [{ name: 'Tools with a migration plan', value: 4, prev: 2, good: 'up', unit: '' }] },
+};
+
+/* Commitments made in weekly business reviews (and recovery-plan actions). */
+const SEED_COMMITMENTS = [
+  { id: 'C1', review: '2026-10-22', text: 'Add weekend support coverage in two regions', owner: 'tb', due: '2026-10-26', kr: 'KR14', status: 'done' },
+  { id: 'C2', review: '2026-10-22', text: 'Send cost allocation data to Finance for account P&L', owner: 'cd', due: '2026-10-30', kr: 'KR7', status: 'open' },
+  { id: 'C3', review: '2026-10-29', text: 'Send Tessera exec-sponsor briefing to Dana', owner: 'er', due: '2026-10-31', kr: 'KR2', status: 'done' },
+  { id: 'C4', review: '2026-10-29', text: 'Bring contractor budget options to the CFO', owner: 'so', due: '2026-11-03', kr: 'KR16', status: 'open' },
+  { id: 'C5', review: '2026-10-29', text: 'Publish the success plan template to all account managers', owner: 'lc', due: '2026-10-30', kr: 'KR12', status: 'done' },
+  { id: 'C6', review: '2026-10-29', text: 'Write the pooled success model proposal', owner: 'lc', due: '2026-11-04', kr: 'KR13', status: 'done' },
+  { id: 'C7', review: '2026-10-29', text: 'Campaign restart proposal with ROI case', owner: 'rp', due: '2026-11-02', kr: 'KR4', status: 'open' },
+  { id: 'C8', review: '2026-10-29', text: 'Share stay-interview themes with the exec team', owner: 'ak', due: '2026-10-31', kr: 'KR19', status: 'open' },
+  { id: 'C9', review: '2026-10-29', text: 'Draft a freeze on new software purchases', owner: 'jb', due: '2026-11-06', kr: 'KR23', status: 'open' },
+  { id: 'C10', review: '2026-10-29', text: 'Pre-approved security pack ready for Sales', owner: 'rp', due: '2026-11-12', kr: 'KR6', status: 'open' },
+  { id: 'C11', review: '2026-10-22', text: 'Pilot a referral bonus with two partners', owner: 'er', due: '2026-10-29', kr: 'KR4', status: 'dropped' },
+];
+
+/* Initiatives: the funded work behind the key results. fte = people, budget/spent in $K. */
+const SEED_INITIATIVES = [
+  { id: 'I1', title: 'Partner referral program', krs: ['KR4'], owner: 'rp', team: 'sales', fte: 2, budget: 120, spent: 40, status: 'risk' },
+  { id: 'I2', title: 'Paid demand campaigns (paused)', krs: ['KR4'], owner: 'rp', team: 'sales', fte: 1, budget: 300, spent: 90, status: 'off' },
+  { id: 'I3', title: 'Deal desk and early solutions engineering', krs: ['KR2', 'KR5', 'KR6'], owner: 'er', team: 'sales', fte: 3, budget: 0, spent: 0, status: 'on' },
+  { id: 'I4', title: 'Pre-approved security pack', krs: ['KR6'], owner: 'rp', team: 'sales', fte: 1, budget: 20, spent: 8, status: 'on' },
+  { id: 'I5', title: 'Account-level P&L build', krs: ['KR7', 'KR3'], owner: 'na', team: 'fin', fte: 2, budget: 60, spent: 35, status: 'on' },
+  { id: 'I6', title: 'Pricing refresh on legacy contracts', krs: ['KR3', 'KR1'], owner: 'pn', team: 'fin', fte: 1, budget: 0, spent: 0, status: 'risk' },
+  { id: 'I7', title: 'Success plans for every account', krs: ['KR12', 'KR9'], owner: 'lc', team: 'cs', fte: 6, budget: 0, spent: 0, status: 'on' },
+  { id: 'I8', title: 'At-risk account recovery program', krs: ['KR13', 'KR9'], owner: 'lc', team: 'cs', fte: 4, budget: 40, spent: 12, status: 'risk' },
+  { id: 'I9', title: 'Critical bug strike team', krs: ['KR16', 'KR10'], owner: 'so', team: 'tech', fte: 3, budget: 140, spent: 0, status: 'off' },
+  { id: 'I10', title: 'Data platform upgrade', krs: ['KR15'], owner: 'cd', team: 'tech', fte: 5, budget: 400, spent: 210, status: 'risk' },
+  { id: 'I11', title: 'Guided setup for new customers', krs: ['KR11'], owner: 'tb', team: 'cs', fte: 3, budget: 80, spent: 55, status: 'on' },
+  { id: 'I12', title: 'Leadership program, cohort 2', krs: ['KR20', 'KR21'], owner: 'ak', team: 'ppl', fte: 1, budget: 90, spent: 30, status: 'on' },
+  { id: 'I13', title: 'Process ownership mapping', krs: ['KR22'], owner: 'jb', team: 'ops', fte: 1, budget: 0, spent: 0, status: 'on' },
+  { id: 'I14', title: 'Software tool consolidation', krs: ['KR23'], owner: 'jb', team: 'ops', fte: 0.5, budget: 0, spent: 0, status: 'risk' },
+  { id: 'I15', title: 'Headquarters office move', krs: [], owner: 'jb', team: 'ops', fte: 2, budget: 250, spent: 60, status: 'on' },
+  { id: 'I16', title: 'Intranet redesign', krs: [], owner: 'ak', team: 'ppl', fte: 1.5, budget: 45, spent: 20, status: 'on' },
+];
+
+/* Cross-team dependencies: one key result needs something from another team. */
+const SEED_DEPS = [
+  { id: 'X1', kr: 'KR10', fromTeam: 'tech', onKr: 'KR16', need: 'Fixes for the 6 critical bugs behind most detractor scores', due: '2026-11-20' },
+  { id: 'X2', kr: 'KR13', fromTeam: 'tech', onKr: 'KR16', need: 'Bug fixes for 4 at-risk accounts', due: '2026-11-13' },
+  { id: 'X3', kr: 'KR7', fromTeam: 'tech', onKr: null, need: 'Cost allocation data for the remaining 8 accounts', due: '2026-10-30' },
+  { id: 'X4', kr: 'KR11', fromTeam: 'tech', onKr: 'KR15', need: 'Guided setup v2 (committed roadmap item)', due: '2026-12-04' },
+  { id: 'X5', kr: 'KR5', fromTeam: 'fin', onKr: 'KR7', need: 'Account P&L so deal desk can price with confidence', due: '2026-11-15' },
+  { id: 'X6', kr: 'KR22', fromTeam: 'ppl', onKr: null, need: 'Role definitions for new process owners', due: '2026-11-20' },
+  { id: 'X7', kr: 'KR23', fromTeam: 'fin', onKr: null, need: 'CFO-backed freeze on new software purchases', due: '2026-11-06' },
+  { id: 'X8', kr: 'KR2', fromTeam: 'co', onKr: null, need: 'CEO sponsor call with Tessera', due: '2026-11-07' },
+  { id: 'X9', kr: 'KR5', fromTeam: 'tech', onKr: null, need: 'Solutions engineers on 5 late-stage deals', due: '2026-11-10', delivered: true },
+];
+
+/* Final scores (0.0-1.0, average across each team's key results) for past quarters. */
+const SEED_HISTORY = {
+  quarters: ['Q1 2026', 'Q2 2026', 'Q3 2026'],
+  company: [0.64, 0.66, 0.69],
+  teams: {
+    sales: [0.62, 0.58, 0.55],
+    fin: [0.95, 1.0, 0.97],
+    cs: [0.55, 0.66, 0.71],
+    tech: [0.41, 0.38, 0.45],
+    ppl: [0.72, 0.70, 0.74],
+    ops: [0.60, 0.68, 0.73],
+  },
+};
+
 /* Weekly check-in dates for the demo quarter (Mondays). */
 const DEMO_CHECKIN_DATES = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02'];
 
@@ -231,11 +336,16 @@ function buildDemo() {
     }
     const out = { ...k, checkins };
     delete out.conf; delete out.notes; delete out.curve; delete out.stale;
+    Object.assign(out, JSON.parse(JSON.stringify(KR_EXTRA[k.id] || {})));
     return out;
   });
   s.decisions = [
     { id: 'D1', date: '2026-10-12', title: 'Adopt one success plan template for all accounts', owner: 'tb', status: 'made', kr: 'KR12' },
     { id: 'D2', date: '2026-10-26', title: 'Add weekend support coverage in two regions', owner: 'tb', status: 'made', kr: 'KR14' },
   ];
+  s.commitments = JSON.parse(JSON.stringify(SEED_COMMITMENTS));
+  s.initiatives = JSON.parse(JSON.stringify(SEED_INITIATIVES));
+  s.deps = JSON.parse(JSON.stringify(SEED_DEPS));
+  s.history = JSON.parse(JSON.stringify(SEED_HISTORY));
   return s;
 }

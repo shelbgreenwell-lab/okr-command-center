@@ -22,6 +22,12 @@ This tool treats OKRs as an **operating system**, not a document:
 | How does team work connect to company goals? | **OKRs & alignment** — team objectives ladder to company objectives |
 | What changed and why? | **Weekly check-ins** — number, 1–10 confidence, note, blocker |
 | What do we do about it? | **Suggested actions** — each slipping key result gets concrete next steps based on *why* it's behind, one click to add to a recovery plan |
+| What is it costing us? | **Value at risk** — each slipping key result shows the dollars exposed, and the attention list ranks by stakes |
+| Did people do what they said they'd do? | **Weekly review** — commitments from each review, overdue items, follow-through rate by owner |
+| Is the right work funded? | **Initiatives & resources** — people and budget by objective, key results with no plan behind them, work tied to no goal |
+| Who is waiting on whom? | **Dependencies** — cross-team asks flagged when late or when the upstream work is behind |
+| Are we good at setting goals? | **Quarter history** — past scores by team, labelled too safe / healthy stretch / over-committing |
+| What goes in the board pack? | **Board one-pager** — the quarter on one printable page |
 | What do I read before the WBR? | **Weekly exec brief** — written automatically, with a time-boxed agenda |
 | Can I just ask? | **Ask** — plain-English questions answered from live data |
 
@@ -33,6 +39,11 @@ This tool treats OKRs as an **operating system**, not a document:
 - **Decisions are tracked like work.** Pending decisions age on the dashboard until made, then move to a decision log.
 - **Silence is a signal.** No check-in for 8+ days marks a key result *stale*.
 - **Diagnosis drives the fix.** Suggestions come from the specific signal: a stuck decision gets a push to decide, an out-of-reach target gets a resources/scope/reset call, a confidence drop gets a conversation, silence gets a request for an update.
+- **Dollars, not just percentages.** Value at risk = value at stake × the share of target projected to be missed.
+- **Commitments are tracked like work.** A silent miss teaches a team that commitments are optional; overdue items stay visible until done or explicitly dropped.
+- **Resources should follow priorities.** Seeing 9% of people on work tied to no goal while two objectives are at risk is the conversation this view exists to start.
+- **Leading indicators sit next to lagging ones**, so you can see inputs move before outcomes do.
+- **The overview opens with what changed since you last looked.**
 - **The meeting writes its own agenda.** The brief proposes a 45-minute weekly business review spent on off-track items and pending decisions — not status.
 
 The exact rules are in the app under **How it works**, so anyone can audit why something is flagged.
@@ -47,8 +58,9 @@ The exact rules are in the app under **How it works**, so anyone can audit why s
 1. Open the demo and read the **Executive overview**.
 2. In **Ask**, try *"Why is integration build time off track?"* or *"Which decisions are waiting on me?"*
 3. Click **Mark decided** on a decision, then check the badge and decision log.
-4. Go to **Weekly check-in**, change a number and confidence, submit — every view updates.
-5. Open **Settings** and move the app date forward to watch pace and staleness change.
+4. Open **Weekly review** and close out an overdue commitment, then check **Board one-pager**.
+5. Go to **Weekly check-in**, change a number and confidence, submit — every view updates.
+6. Open **Settings** and move the app date forward to watch pace and staleness change.
 
 Edits save in your browser. *Settings → Reset to demo data* restores the original.
 
@@ -61,6 +73,7 @@ index.html        app shell
 css/styles.css    design system (light + dark mode, responsive)
 js/engine.js      OKR math: progress, pace, status, forecast, attention ranking
 js/suggest.js     mitigation suggestions for slipping key results
+js/views2.js      weekly review, initiatives, dependencies, history, board one-pager
 js/ask.js         question answering (built-in analyst + optional Claude)
 js/app.js         views, charts, forms
 js/data.js        fictional demo company
