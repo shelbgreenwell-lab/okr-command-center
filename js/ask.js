@@ -4,7 +4,7 @@
    2. Claude (optional): if the viewer adds their own Anthropic API key in Settings,
       open-ended questions go to Claude with a compact snapshot of the data. */
 
-const STOP = new Set('a an the is are was were be of to in on for and or with what whats which who whos how hows why our we us me my i do does did any anything there this that it its at by from about show tell give list all can should could would where'.split(' '));
+const STOP = new Set('too very a an the is are was were be of to in on for and or with what whats which who whos how hows why our we us me my i do does did any anything there this that it its at by from about show tell give list all can should could would where'.split(' '));
 
 const SYNONYMS = {
   revenue: ['bookings', 'retention', 'revenue', 'pipeline'],
@@ -26,17 +26,24 @@ const SYNONYMS = {
 };
 
 const INTENTS = [
+  { id: 'hidden', re: /green.*(red|really)|really (on track|green)|hidden (risk|problem)|watermelon|look(s)? (fine|good|green) but|false (green|positive)|actually (red|behind|off)/ },
+  { id: 'priorities', re: /priorit(y|ies)|what matters most|know what .*(matters|important)|strategy (is )?(clear|understood)/ },
+  { id: 'stop', re: /stop doing|should we stop|what to stop|stop funding|\bkill\b|zombie|wasting|cut (back|projects|work)|deprioriti|re-?scope/ },
+  { id: 'payoff', re: /pay(ing)? off|payoff|deliver(ed)? (what|on|the)|promised|\broi\b|return on|benefits?\b|was it worth|did .* work\b/ },
+  { id: 'whatif', re: /what if|if .* (slip|slips|miss|misses|fail|fails|delay)|scenario|what happens if/ },
+  { id: 'capacity', re: /capacity|stretched|overload|too much|bandwidth|spread (too )?thin|enough people|burn ?out/ },
+  { id: 'board', re: /\bboard\b|investors?|tell the (ceo|board)/ },
   { id: 'metrics', re: /trust (the|our|these) (numbers|data|metrics)|numbers can we trust|which numbers|metric definition|definition of|defined|source of truth|data quality|discrepanc|reconcil|sources disagree|how (is|are) .* measured/ },
   { id: 'cadence', re: /meeting|cadence|calendar|pre.?read|qbr|offsite|business review|staff meeting|coming up/ },
-  { id: 'velocity', re: /how (fast|quickly|long).*decid|decision (speed|velocity)|time to decide|slow to decide/ },
+  { id: 'velocity', re: /how (fast|quickly|long).*(decid|decision)|decision (speed|velocity)|time to decide|slow to decide|decisions (are )?(slow|fast)/ },
   { id: 'since', re: /since (i|my) last|what'?s new|catch me up|did i miss/ },
-  { id: 'money', re: /\$|dollar|value (is )?at risk|how much .*(at risk|at stake)|exposure|cost us|at stake|how much (money|revenue|is)|financial impact|worth/ },
+  { id: 'money', re: /\$|dollar|value (is )?at risk|how much .*(at risk|at stake)|exposure|cost us|at stake|how much (money|revenue|is)|financial impact/ },
   { id: 'commitments', re: /commit|follow.?through|overdue|promised|said (they|he|she) would|action items?|accountab/ },
-  { id: 'deps', re: /depend|upstream|downstream|waiting on (another|other|which) team|who is waiting|cross.?team|handoff/ },
-  { id: 'resources', re: /initiative|project|budget|headcount|\bfte\b|resourc|staff(ed|ing)|funding|funded|spend|where (are )?(our )?people/ },
+  { id: 'deps', re: /depend|upstream|downstream|waiting on (another|other|which) team|who is waiting|cross.?team|handoff|rely on|count on|reliab|each other|silo/ },
+  { id: 'resources', re: /initiative|project|budget|headcount|\bfte\b|resourc|staff(ed|ing)|funding|funded|spend|where (are )?(our )?people|money where|where .*(money|budget)|allocat/ },
   { id: 'history', re: /history|last quarter|previous quarter|past quarters|sandbag|calibrat|too (safe|easy|ambitious)|track record|good at setting/ },
   { id: 'mitigate', re: /suggest|mitigat|what should (we|i) do|how (do|can) we (fix|recover|get)|recover|back on track|options|next steps?|action plan|what can we do/ },
-  { id: 'attention', re: /attention|focus on|priorit|worry about|top (3|three|things)|what should i|most important|keep me up/ },
+  { id: 'attention', re: /attention|focus on|worry about|top (3|three|things)|what should i|most important|keep me up/ },
   { id: 'decisions', re: /decision|decide|approv|need from me|waiting on me|my call|sign.?off|unblock|what do you need/ },
   { id: 'status', re: /off.?track|at.?risk|behind|\bred\b|slipping|failing|trouble|worr|concern|lagging|miss/ },
   { id: 'stale', re: /stale|ha(s|ve)n'?t (updated|checked|submitted)|not (updated|checked)|who.*check.?in|no (update|check)|missing (update|check)|overdue|silent|went dark/ },
@@ -77,10 +84,79 @@ const Ask = {
     const H = (k) => Engine.kr(state, k);
     const items = (list) => list.map((k) => k.id);
     const label = scope.label;
-    const INTENT_LABEL = { attention: 'what needs attention', decisions: 'decisions waiting', status: 'what is behind', stale: 'missing check-ins', blockers: 'blockers', movers: 'what changed', forecast: 'a forecast', wins: 'what is going well', why: 'an explanation', summary: 'a summary', mitigate: 'how to recover', money: 'value at risk', commitments: 'commitments', deps: 'dependencies', resources: 'people and budget', history: 'goal-setting history', metrics: 'which numbers to trust', cadence: 'upcoming meetings', velocity: 'decision speed', since: 'what changed recently' };
-    const about = scope.person ? scope.person.name : scope.team ? scope.team.name : scope.krs ? (scope.krs.length === 1 ? scope.krs[0].title : scope.krs.length + ' related key results') : 'the whole company';
+    const INTENT_LABEL = { hidden: 'goals that look green but may not be', priorities: 'company priorities', stop: 'what to stop', payoff: 'whether funded work paid off', whatif: 'a what-if', capacity: 'capacity', board: 'a board summary', attention: 'what needs attention', decisions: 'decisions waiting', status: 'what is behind', stale: 'missing check-ins', blockers: 'blockers', movers: 'what changed', forecast: 'a forecast', wins: 'what is going well', why: 'an explanation', summary: 'a summary', mitigate: 'how to recover', money: 'value at risk', commitments: 'commitments', deps: 'dependencies', resources: 'people and budget', history: 'goal-setting history', metrics: 'which numbers to trust', cadence: 'upcoming meetings', velocity: 'decision speed', since: 'what changed recently' };
+    const GLOBAL = ['priorities', 'stop', 'payoff', 'capacity', 'board', 'hidden'];
+    const about = GLOBAL.includes(intents[0]) && !scope.person && !scope.team ? 'the whole company' : scope.person ? scope.person.name : scope.team ? scope.team.name : scope.krs ? (scope.krs.length === 1 ? scope.krs[0].title : scope.krs.length + ' related key results') : 'the whole company';
     const reading = (intents.length ? intents.slice(0, 2).map((i) => INTENT_LABEL[i]).join(' + ') : 'a status update') + ' · about ' + about;
     const out = (text, ids = [], follow = []) => ({ text, items: ids, followups: follow, source: 'local', reading });
+
+    if (intents[0] === 'hidden') {
+      let list = P.hidden;
+      if (scope.person) list = list.filter((x) => x.kr.owner === scope.person.id);
+      else if (scope.team) list = list.filter((x) => scope.krs.includes(x.kr));
+      if (!list.length) return out('Nothing marked on track shows warning signs right now: no worsening leading indicators, late upstream work, overdue commitments, stalls or disputed numbers behind a green status.');
+      return out(`**${list.length} goal${list.length > 1 ? 's are' : ' is'} marked on track, but the evidence around ${list.length > 1 ? 'them' : 'it'} says otherwise:**\n${list.map((x) => `- **${x.kr.title}** (${U.person(state, x.kr.owner).name}) — ${x.h.hidden.join('; ')}`).join('\n')}\n\nThese are the ones to pressure-test now, before they turn red in a few weeks.`, items(list.map((x) => x.kr)), ['What should we stop doing?']);
+    }
+
+    if (intents[0] === 'priorities') {
+      const tops = state.objectives.filter((o) => !o.parent);
+      const lines = tops.map((o) => { const s = Engine.objective(state, o); return `- **${o.title}** — ${STATUS_LABEL[s.status].toLowerCase()}, ${s.krs.length} key results, ${s.children.length} team objective${s.children.length === 1 ? '' : 's'} supporting it (${s.children.map((c) => U.team(state, c.team).name).join(', ')})`; });
+      const orphan = state.objectives.filter((o) => o.parent === null && o.team !== 'co');
+      return out(`**The company has ${tops.length} priorities this quarter:**\n${lines.join('\n')}\n\nEvery team objective is linked to one of them${orphan.length ? `, except ${orphan.length}` : ''}. What this can't tell you is whether people actually *know* them — research on strategy execution finds many managers can't name their company's top priorities. A two-question pulse each quarter ("name our top three priorities", "which one does your work serve?") is the way to find out.`, [], ['Which green goals might actually be red?']);
+    }
+
+    if (intents[0] === 'stop') {
+      const PA = Engine.payoffAll(state);
+      if (!PA.stop.length) return out('Nothing stands out to stop: every funded project is tied to a goal and none has used much of its effort without moving it.');
+      return out(`**${PA.stop.length} funded project${PA.stop.length > 1 ? 's are' : ' is'} worth stopping or re-scoping**, with about ${fmtK(PA.atStake)} of effort still to spend:\n${PA.stop.map(({ i, p }) => `- **${i.title}** — ${p.action.toLowerCase()}. ${p.why}`).join('\n')}\n\nOpen Resources to see what each one promised and who owns it.`, [...new Set(PA.stop.flatMap(({ i }) => i.krs))], ['Did our initiatives deliver what they promised?']);
+    }
+
+    if (intents[0] === 'payoff') {
+      const PA = Engine.payoffAll(state);
+      const by = (v) => PA.rows.filter((r) => r.p.verdict === v);
+      const line = (v, label) => by(v).length ? `- **${label} (${by(v).length}):** ${by(v).map((r) => r.i.title).join(', ')}` : '';
+      return out(`**Of ${PA.rows.length} funded projects:**\n${[line('paying', 'Paying off'), line('watch', 'Not yet — their goal is at risk'), line('early', 'Too early to tell'), line('stalled', 'Stalled — effort used, goal not moving'), line('nogoal', 'Tied to no goal')].filter(Boolean).join('\n')}\n\nEach is judged on effort used (budget plus people time) against movement on the main goal it was funded for.`, [], ['What should we stop doing?']);
+    }
+
+    if (intents[0] === 'whatif') {
+      let k = scope.krs && scope.krs[0];
+      if (!k) {
+        const ws = q.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length >= 6 && !STOP.has(w));
+        const r = state.risks.find((x) => ws.some((w) => (x.title + ' ' + (x.decision || '')).toLowerCase().includes(w)));
+        if (r) { k = state.krs.find((x) => x.id === r.kr); scope.label = r.decision || r.title; }
+      }
+      if (!k) return out('Name the goal, deal or decision you want to test — for example "What if the Tessera deal slips?" or "What if the contractor budget isn\'t approved?"');
+      const h = H(k);
+      const flat = Math.min(1, h.progress);
+      const exp2 = Math.round((k.stake || 0) * (1 - flat));
+      const o = U.obj(state, k.obj); const top = o.parent ? U.obj(state, o.parent) : o; const s = Engine.objective(state, top);
+      const ks = [...s.krs, ...state.krs.filter((x) => s.children.some((c) => c.id === x.obj))];
+      const before = Engine.projectedScore(state, ks);
+      const after = ks.reduce((a, x) => a + (x.id === k.id ? flat : Math.min(1, H(x).projected)), 0) / ks.length;
+      return out(`**If "${scope.label && scope.label !== k.title ? scope.label : k.title}" slips and "${k.title}" makes no more progress this quarter:**\n- It ends at **${U.fmt(k, h.value)}** instead of about ${U.fmt(k, h.projectedValue)} (target ${U.fmt(k, k.target)}).\n- Value at risk on it rises from ${fmtK(h.exposure)} to **${fmtK(exp2)}** (+${fmtK(exp2 - h.exposure)}).\n- "${top.title}" projected score falls from ${before.toFixed(2)} to **${after.toFixed(2)}**.\n\nThis is a worst case for this one goal; everything else is held at its current forecast.`, items([k]), ['Which decisions are waiting on me?']);
+    }
+
+    if (intents[0] === 'capacity') {
+      const load = {}; state.krs.forEach((k) => { const h = H(k); const o = load[k.owner] = load[k.owner] || { n: 0, behind: 0 }; o.n++; if (h.status !== 'on') o.behind++; });
+      const heavy = Object.entries(load).filter(([, o]) => o.behind >= 2 || o.n >= 4).sort((a, b) => b[1].behind - a[1].behind);
+      const C = Engine.commitments(state); const od = {}; C.overdue.forEach((c) => { od[c.owner] = (od[c.owner] || 0) + 1; });
+      const deps = (state.deps || []).filter((d) => !d.delivered); const byT = {}; deps.forEach((d) => { byT[d.fromTeam] = (byT[d.fromTeam] || 0) + 1; });
+      const bott = Object.entries(byT).sort((a, b) => b[1] - a[1])[0];
+      const inits = {}; (state.initiatives || []).forEach((i) => { inits[i.owner] = (inits[i.owner] || 0) + 1; });
+      const multi = Object.entries(inits).filter(([, n]) => n >= 2);
+      const L = [];
+      heavy.forEach(([id, o]) => L.push(`- **${U.person(state, id).name}** owns ${o.n} key results, ${o.behind} behind${od[id] ? `, and has ${od[id]} overdue commitment${od[id] > 1 ? 's' : ''}` : ''}.`));
+      if (bott) L.push(`- **${U.team(state, bott[0]).name}** is the most depended-on team, with ${bott[1]} open asks from other teams.`);
+      multi.forEach(([id, n]) => { if (!heavy.some(([h]) => h === id)) L.push(`- ${U.person(state, id).name} leads ${n} funded projects at once.`); });
+      return out(`**Where capacity looks stretched:**\n${L.join('\n') || '- Nothing obvious: no owner has several goals behind and no team is a bottleneck.'}\n\nThe app sees ownership and asks, not hours worked — treat this as where to start the conversation.`, [], ['What should we stop doing?']);
+    }
+
+    if (intents[0] === 'board') {
+      const Hs = state.history || { company: [] };
+      const top2 = P.all.filter((x) => x.h.exposure).sort((a, b) => b.h.exposure - a.h.exposure).slice(0, 2);
+      const PA = Engine.payoffAll(state);
+      return out(`**For the board, in four points:**\n- **Where we are:** ${P.counts.on} of ${P.all.length} key results on track; ${P.counts.off} off track and ${P.counts.risk} at risk. Projected quarter score ${Engine.projectedScore(state, state.krs).toFixed(2)} vs ${Hs.company.length ? Hs.company[Hs.company.length - 1].toFixed(2) : '—'} last quarter.\n- **What's at stake:** ${fmtK(P.exposure)} of value at risk, mostly in "${top2.map((x) => x.kr.title).join('" and "')}".\n- **What we're doing:** ${state.decisions.length} decisions made this quarter; ${P.decisions.length} waiting; ${PA.stop.length} funded projects under review to stop or re-scope.\n- **What we're watching:** ${P.hidden.length} goals marked on track but showing warning signs${P.decisions[0] ? `, and the oldest open decision (${P.decisions[0].decision.toLowerCase()}, ${P.decisions[0].age} days)` : ''}.\n\nThe Board one-pager has the printable version.`, items(top2.map((x) => x.kr)), ['What if the Tessera deal slips to next quarter?']);
+    }
 
     if (intents[0] === 'metrics' || (intents.includes('metrics') && !scope.krs)) {
       const I = Engine.integrity(state);
@@ -95,6 +171,12 @@ const Ask = {
       return out(`**Decisions take a median of ${V.median ?? '—'} days** from request to decision; ${V.within7 != null ? U.pct(V.within7) : '—'} were made within 7 days this quarter. ${V.waiting.length} are waiting now, the oldest for ${V.oldest} days${V.overdue.length ? `, and ${V.overdue.length} are past their needed-by date` : ''}.`, items(V.waiting.map((d) => state.krs.find((k) => k.id === d.kr)).filter(Boolean)), ['Which decisions are waiting on me?']);
     }
 
+    if (intents[0] === 'cadence' && /worth|value|productive|waste|effective|useful/.test(q)) {
+      const V = Engine.decisionVelocity(state); const C = Engine.commitments(state);
+      const perMonth = (m) => ({ weekly: 4.33, monthly: 1, quarterly: 1 / 3, semiannual: 1 / 6 }[m.freq] || 0) * m.minutes / 60;
+      const hours = (state.cadence || []).reduce((a, m) => a + perMonth(m), 0);
+      return out(`**Each executive spends about ${hours.toFixed(0)} hours a month in recurring leadership meetings.** Whether that's worth it shows up in what they produce:\n- **Decisions:** ${state.decisions.length} made this quarter, median ${V.median ?? '—'} days from request to decision; ${V.waiting.length} still waiting, the oldest ${V.oldest} days.\n- **Follow-through:** ${U.pct(C.rate)} of commitments that came due were done; ${C.overdue.length} are overdue.\n- **Design:** every meeting has a stated purpose, decision rights and a pre-read that writes itself, so time goes to deciding rather than status.\n\nIf decisions keep waiting while the meetings run, the weekly exec staff isn't doing its job — that's the one to fix first.`, [], ['How fast do we make decisions?']);
+    }
     if (intents[0] === 'cadence') {
       const up = Engine.meetingsBetween(state, state.meta.asOf, 21);
       return out(`**Next three weeks:**\n${up.map((x) => `- **${U.date(x.date, { weekday: 'short', month: 'short', day: 'numeric' })}** — ${x.m.name}: ${x.m.purpose}`).join('\n')}\n\nEvery meeting's pre-read is generated on the Operating cadence page.`, [], ['Which decisions are waiting on me?']);
@@ -264,7 +346,7 @@ const Ask = {
     const P = Engine.portfolio(state);
     const top = P.attention.slice(0, 3);
     const pace = P.progress - P.expected;
-    let t = `**Week ${Engine.week(state)} of ${Engine.totalWeeks(state)}: ${U.pct(P.progress)} complete vs ${U.pct(P.expected)} expected** — ${pace >= -0.05 ? 'broadly on pace' : pace >= -0.15 ? 'slightly behind pace' : 'meaningfully behind pace'}. ${P.counts.on} on track, ${P.counts.risk} at risk, ${P.counts.off} off track.\n\nWhere to focus:\n`;
+    let t = `**Week ${Engine.week(state)} of ${Engine.totalWeeks(state)}: ${P.counts.off + P.counts.risk} of ${P.all.length} key results need attention** (${P.counts.off} off track, ${P.counts.risk} at risk) with ${fmtK(P.exposure)} of value at risk.${P.hidden.length ? ` ${P.hidden.length} more are marked on track but show warning signs.` : ''}\n\nWhere to focus:\n`;
     t += top.map((x, i) => `- **${i + 1}. ${x.kr.title}** (${U.workTeam(state, x.kr).name}) — ${x.h.reasons.join(', ')}.`).join('\n');
     if (P.decisions.length) t += `\n\n**${P.decisions.length} decision${P.decisions.length > 1 ? 's' : ''} waiting on executives**, oldest at ${P.decisions[0].age} days: ${P.decisions[0].decision.toLowerCase()}.`;
     if (P.stale.length) t += `\n\n${P.stale.length} key result${P.stale.length > 1 ? 's have' : ' has'} no check-in in over ${STALE_DAYS} days.`;
@@ -331,6 +413,14 @@ const Ask = {
         const krs = state.krs.filter((k) => objs.some((o) => o.id === k.obj) || U.person(state, k.owner).team === t.id);
         return { krs, label: t.name, team: t };
       }
+    }
+    // Match a named blocker, deal or decision (e.g. "Tessera")
+    const words = q.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length >= 5 && !STOP.has(w));
+    for (const r of state.risks) {
+      const hay = (r.title + ' ' + (r.decision || '')).toLowerCase();
+      const toks = [...r.title.split(/\s+/).slice(1), ...(r.decision || '').split(/\s+/).slice(1)];
+      const hit = words.find((w) => hay.includes(w) && toks.some((x) => /^[A-Z][a-z]/.test(x) && x.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(w)));
+      if (hit) { const k = state.krs.find((x) => x.id === r.kr); if (k) return { krs: [k], label: r.decision || r.title }; }
     }
     // Topic match against KR titles
     let tokens = q.replace(/[^a-z0-9&\- ]/g, ' ').split(/\s+/).flatMap((w) => w.includes('-') ? [w, ...w.split('-')] : [w]).filter((w) => w && !STOP.has(w) && w.length > 2);

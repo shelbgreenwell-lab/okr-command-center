@@ -1,6 +1,6 @@
 /* App shell: state, routing, views, charts, forms. No framework, no build step. */
 
-const STORE_KEY = 'okr-system-v6';
+const STORE_KEY = 'okr-system-v7';
 let state;
 let askThread = [];
 
@@ -196,6 +196,7 @@ function viewOverview() {
       <div class="muted small">${d.age} days waiting · ${esc(U.person(state, d.decisionOwner).name)} decides</div></div>
       <button class="btn sm" data-action="decide" data-id="${d.id}">Record decision</button>
     </div>`).join('') || '<p class="muted small">No decisions waiting.</p>';
+  const looksGreen = P.hidden.slice(0, 3).map((x) => `<li>${pill('on')} ${lk('kr', x.kr.id, esc(x.kr.title))}<div class="muted small">but ${esc(x.h.hidden.join(' · '))}</div></li>`).join('');
   const overdue = C.overdue.slice(0, 3).map((c) => `<li>${lk('commitment', c.id, esc(c.text))}<div class="muted small">${esc(U.person(state, c.owner).name)} · due ${U.date(c.due)}</div></li>`).join('');
 
   const companyObjs = state.objectives.filter((o) => !o.parent).map((o) => {
@@ -215,7 +216,7 @@ function viewOverview() {
   <section class="hero">
     <div class="hero-k">${esc(state.meta.company)} · ${esc(q.label)}, week ${Engine.week(state)} of ${Engine.totalWeeks(state)}</div>
     <h1>${top.length ? `${top.length} goal${top.length > 1 ? 's' : ''} need${top.length > 1 ? '' : 's'} you this week` : 'Nothing needs you this week'}</h1>
-    <p class="hero-sub">${P.counts.off} off track and ${P.counts.risk} at risk out of ${P.all.length} key results, with <b>${fmtK(P.exposure)}</b> of value at risk. ${P.decisions.length ? `${P.decisions.length} decision${P.decisions.length > 1 ? 's are' : ' is'} waiting on executives.` : ''}</p>
+    <p class="hero-sub">${P.counts.off} off track and ${P.counts.risk} at risk out of ${P.all.length} key results, with <b>${fmtK(P.exposure)}</b> of value at risk. ${P.decisions.length ? `${P.decisions.length} decision${P.decisions.length > 1 ? 's are' : ' is'} waiting on executives.` : ''}${P.hidden.length ? ` ${P.hidden.length} goal${P.hidden.length > 1 ? 's' : ''} marked on track show${P.hidden.length > 1 ? '' : 's'} warning signs.` : ''}</p>
     <div class="hstats">
       ${stat('Key results', `<span class="st-on-t sm">●</span>${P.counts.on} <span class="st-risk-t sm">▲</span>${P.counts.risk} <span class="st-off-t sm">■</span>${P.counts.off}`, P.stale.length ? `${P.stale.length} without a recent check-in` : 'all checked in', 'On track / at risk / off track. Status uses pace against the calendar and the owner\'s confidence — whichever is worse.', 'data-action="nav" data-to="okrs"')}
       ${stat('Value at risk', fmtK(P.exposure), `${P.all.filter((x) => x.h.exposure > 0).length} key results`, 'Value at stake × the share of target we are on course to miss, for at-risk and off-track key results.', 'data-action="nav" data-to="board"')}
@@ -230,6 +231,7 @@ function viewOverview() {
       <div class="attn-list">${top.map(attnCard).join('') || '<p class="muted">Everything is on track.</p>'}</div></div>
     <div>
       <div class="card"><div class="card-h"><h2>Decisions waiting</h2><a href="#/risks" class="small">All →</a></div>${decisions}</div>
+      ${looksGreen ? `<div class="card green-but"><div class="card-h"><h2>Looks green, but…</h2><a href="#" class="small" data-action="see-hidden">All ${P.hidden.length} →</a></div><p class="muted tiny">Marked on track, but the evidence around them says otherwise.</p><ul class="plain compact">${looksGreen}</ul></div>` : ''}
       <div class="card"><div class="card-h"><h2>Overdue commitments</h2><a href="#/review" class="small">Weekly review →</a></div>${overdue ? `<ul class="plain compact">${overdue}</ul>` : '<p class="muted small">Nothing overdue.</p>'}</div>
     </div>
   </section>
@@ -244,6 +246,7 @@ function viewOkrs() {
   const matchKr = (k) => {
     const h = Engine.kr(state, k);
     if (f.status === 'behind') { if (h.status === 'on') return false; }
+    else if (f.status === 'hidden') { if (!(h.hidden && h.hidden.length)) return false; }
     else if (f.status && h.status !== f.status && !(f.status === 'stale' && h.stale)) return false;
     if (f.owner && k.owner !== f.owner) return false;
     if (f.q && !(k.title + ' ' + U.obj(state, k.obj).title).toLowerCase().includes(f.q.toLowerCase())) return false;
@@ -254,7 +257,7 @@ function viewOkrs() {
     const last = Engine.lastCheckin(k);
     return `<button class="krrow" data-action="kr" data-id="${k.id}">
       <div class="kr-main"><div class="kr-title"><span class="kid-id">${k.id}</span>${esc(k.title)}</div>
-        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(() => { const n = (state.commitments || []).filter((c) => c.kr === k.id && c.status === 'open').length; return n ? `<span class="tag good">${n} open action${n > 1 ? 's' : ''}</span>` : ''; })()}${h.metric && h.metric.status === 'discrepancy' ? '<span class="tag bad">⚠ Sources disagree</span>' : ''}${h.exposure ? `<span class="money small">${fmtK(h.exposure)} at risk</span>` : ''}</div></div>
+        <div class="kr-sub">${avatar(state, k.owner, 'sm')}<span>${esc(U.person(state, k.owner).name)}</span>${h.stale ? '<span class="tag warn">Stale</span>' : ''}${h.openRisks.length ? `<span class="tag">⚑ ${h.openRisks.length}</span>` : ''}${(() => { const n = (state.commitments || []).filter((c) => c.kr === k.id && c.status === 'open').length; return n ? `<span class="tag good">${n} open action${n > 1 ? 's' : ''}</span>` : ''; })()}${h.hidden && h.hidden.length ? `<span class="tag warn" data-tip="${esc('Marked on track, but ' + h.hidden.join(', '))}">⚠ Looks green, but…</span>` : h.metric && h.metric.status === 'discrepancy' ? '<span class="tag bad">⚠ Sources disagree</span>' : ''}${h.exposure ? `<span class="money small">${fmtK(h.exposure)} at risk</span>` : ''}</div></div>
       <div class="kr-prog">${progressBar(h.progress, h.expected, h.status)}<div class="kr-vals"><b>${U.fmt(k, h.value)}</b> <span class="muted">of ${U.fmt(k, k.target)}</span></div></div>
       <div class="kr-conf">${confChip(h)}</div>
       <div class="kr-spark">${sparkline(k)}</div>
@@ -289,7 +292,7 @@ function viewOkrs() {
   <div class="filters">
     <input type="search" placeholder="Search key results" value="${esc(f.q)}" data-filter="q"/>
     ${sel('team', [['', 'All teams'], ...state.teams.filter((t) => t.id !== 'co').map((t) => [t.id, t.name])], f.team)}
-    ${sel('status', [['', 'Any status'], ['behind', 'At risk or off track'], ['on', 'On track'], ['risk', 'At risk'], ['off', 'Off track'], ['stale', 'Stale']], f.status)}
+    ${sel('status', [['', 'Any status'], ['behind', 'At risk or off track'], ['hidden', 'Looks green, but…'], ['on', 'On track'], ['risk', 'At risk'], ['off', 'Off track'], ['stale', 'Stale']], f.status)}
     ${sel('owner', [['', 'Any owner'], ...state.people.map((p) => [p.id, p.name])], f.owner)}
     ${(f.team || f.status || f.owner || f.q) ? '<button class="btn sm ghost" data-action="clear-filters">Clear</button>' : ''}
     <button class="btn sm ghost compact-btn" data-action="okr-compact">${okrCompact ? 'Show key results' : 'Objectives only'}</button>
@@ -396,7 +399,7 @@ function briefText() {
   L.push(`${state.meta.company} — Weekly OKR Brief`);
   L.push(`${q.label}, week ${Engine.week(state)} of ${Engine.totalWeeks(state)} · as of ${U.date(state.meta.asOf, { month: 'long', day: 'numeric', year: 'numeric' })}`);
   L.push('');
-  L.push(`HEADLINE: ${U.pct(P.progress)} complete vs ${U.pct(P.expected)} expected. ${P.counts.on} on track, ${P.counts.risk} at risk, ${P.counts.off} off track.`);
+  L.push(`HEADLINE: ${P.counts.off + P.counts.risk} of ${P.all.length} key results need attention (${P.counts.off} off track, ${P.counts.risk} at risk), with ${fmtK(P.exposure)} of value at risk.${P.hidden.length ? ` ${P.hidden.length} more are marked on track but show warning signs.` : ''}`);
   L.push(`VALUE AT RISK: ${fmtK(P.exposure)} across ${P.all.filter((x) => x.h.exposure > 0).length} key results. Commitment follow-through: ${U.pct(P.commitments.rate)} (${P.commitments.overdue.length} overdue).`);
   L.push('');
   L.push('SCORECARD');
@@ -420,6 +423,11 @@ function briefText() {
   if (!P.decisions.length) L.push('• None.');
   P.decisions.forEach((d) => L.push(`• ${d.decision} — decider: ${U.person(state, d.decisionOwner).name}, waiting ${d.age} days. Proposed: ${d.mitigation}`));
   L.push('');
+  if (P.hidden.length) {
+    L.push('LOOKS GREEN, BUT');
+    P.hidden.forEach((x) => L.push(`• ${x.kr.title} is marked on track, but ${x.h.hidden.join(', ')} — ${U.person(state, x.kr.owner).name}`));
+    L.push('');
+  }
   const I = Engine.integrity(state);
   const disc = I.rows.filter((r) => r.mh.status === 'discrepancy');
   if (disc.length) {
@@ -523,6 +531,10 @@ function viewMethod() {
       <p><b>Initiatives</b> are the funded work behind key results, with people and budget, so you can see whether resources follow priorities and spot work tied to no goal. <b>Dependencies</b> are flagged when late or when the work they rely on is itself behind. <b>Quarter history</b> shows final scores by team and labels the pattern: consistently 0.9+ suggests targets are too safe; below 0.5 suggests over-commitment or under-resourcing.</p>
       <h2>Leading indicators & since you last looked</h2>
       <p>Key results are mostly lagging. Leading indicators on each key result show whether the inputs are moving the right way before the outcome does. The overview opens with what changed since your last visit (on a first visit, since last week).</p>
+      <h2>Looks green, but…</h2>
+      <p>Status reports tend to stay green until a problem can't be hidden. So the app checks every on-track goal against the evidence around it: leading indicators getting worse, upstream work that is late or behind, overdue commitments, no movement in two weeks, a confidence drop of two or more points, or data sources that disagree. Any of these flags the goal as "looks green, but…" without changing its status — the point is to prompt a conversation, not to overrule the owner.</p>
+      <h2>Is the funded work paying off?</h2>
+      <p>Each initiative records what it promised. The app compares effort used — budget spent plus people time so far, at roughly $45K per person per quarter — with movement on the main goal it was funded for. Verdicts: <b>paying off</b> (goal on track), <b>too early to tell</b> (under a quarter of effort used), <b>watch</b> (goal at risk), <b>stalled</b> (effort used, goal not moving or off track) and <b>tied to no goal</b>. Stalled and unlinked work becomes a stop-or-re-scope candidate, with the effort still to spend. The owner's own status sits alongside, so disagreements are visible.</p>
       <h2>Suggested actions</h2>
       <p>Every key result that is at risk, off track or stale gets up to four suggested next steps, chosen from what is actually wrong. For example: a pending decision gets a push to decide, a target out of reach gets a resources/scope/reset call, a confidence drop gets a quick conversation, missing updates get a request for a fresh check-in. Add any suggestion to the key result's recovery plan with one click; it gets the owner and a one-week due date.</p>
       <h2>Ask</h2>
@@ -571,7 +583,7 @@ function renderKr(id) {
   const chart = lineChart({
     id: 'kr-' + k.id,
     series: [{ name: 'Actual', cls: 's1', pts: actual, dot: true }, { name: 'Plan to target', cls: 'sref', dash: true, pts: [[0, k.start], [wk, k.target]] }],
-    xMax: wk, xLabel: (i) => 'W' + i, yFmt: (v) => U.fmt(k, v), yMin: lo - pad, yMax: hi + pad, height: 200,
+    xMax: wk, xLabel: (i) => 'W' + i, yFmt: (v) => U.fmt(k, v), yMin: lo >= 0 ? Math.max(0, lo - pad) : lo - pad, yMax: hi + pad, height: 200,
   });
   const hist = k.checkins.slice().reverse().map((c) => `<li><div class="feed-h"><b>${U.fmt(k, c.value)}</b><span class="muted small">${U.date(c.date)} · confidence ${c.confidence}/10 · ${esc(U.person(state, c.by || k.owner).name)}</span></div>${c.note ? `<div class="small">${esc(c.note)}</div>` : ''}</li>`).join('');
   const risks = state.risks.filter((r) => r.kr === k.id).map((r) => `<li><span class="sev sev-${r.severity}">${r.severity}</span> ${lk('risk', r.id, '<b>' + esc(r.title) + '</b>')} <span class="muted small">(${r.status})</span><div class="small muted">${esc(r.mitigation)}</div></li>`).join('');
@@ -588,7 +600,7 @@ function renderKr(id) {
         <div><span class="muted tiny">Projected end</span><b>${U.fmt(k, h.projectedValue)}</b></div>
         <div data-tip="${esc(k.stakeNote || 'Set the value at stake in Edit')}"><span class="muted tiny">Value at risk</span><b class="${h.exposure ? 'money' : ''}">${h.exposure ? fmtK(h.exposure) : '—'}</b><span class="muted tiny">of ${fmtK(k.stake || 0)} at stake</span></div>
       </div>
-      ${h.reasons.length ? `<div class="callout">Why it's flagged: ${esc(h.reasons.join(' · '))}</div>` : ''}
+      ${h.status === 'on' && h.hidden && h.hidden.length ? `<div class="callout">Marked on track, but: ${esc(h.hidden.join(' · '))}. Worth testing whether the status is real.</div>` : h.reasons.length && h.status !== 'on' ? `<div class="callout">Why it's flagged: ${esc(h.reasons.join(' · '))}</div>` : ''}
       ${chart}
       <div class="row gap"><button class="btn primary" data-action="quick-checkin" data-id="${k.id}">Check in</button><button class="btn" data-action="new-risk" data-kr="${k.id}">Log blocker</button><button class="btn" data-action="ask" data-q="Why is ${esc(k.id)} ${h.status === 'on' ? 'on track' : 'behind'}?">Ask about this</button><button class="btn ghost" data-action="edit-kr" data-id="${k.id}">Edit</button></div>
       ${suggestionsHtml(k)}
@@ -803,6 +815,8 @@ document.addEventListener('click', (e) => {
     case 'new-risk': newRisk(a.dataset.kr); break;
     case 'risk-filter': riskFilter = a.dataset.v; render(); break;
     case 'risk-tab': riskTab = a.dataset.v; render(); break;
+    case 'scroll-to': { const el = document.getElementById(a.dataset.to); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); break; }
+    case 'see-hidden': okrFilter = { team: '', status: 'hidden', owner: '', q: '' }; okrCompact = false; location.hash = '#/okrs'; break;
     case 'see-behind': okrFilter = { team: '', status: 'behind', owner: '', q: '' }; location.hash = '#/okrs'; break;
     case 'okr-compact': okrCompact = !okrCompact; render(); break;
     case 'tour-start': tourStart(); break;

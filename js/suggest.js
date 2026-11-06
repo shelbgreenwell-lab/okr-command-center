@@ -6,7 +6,7 @@
 const Suggest = {
   forKr(state, kr) {
     const h = Engine.kr(state, kr);
-    if (h.status === 'on' && !h.stale) return [];
+    if (h.status === 'on' && !h.stale && !(h.hidden && h.hidden.length)) return [];
     const out = [];
     const owner = U.person(state, kr.owner);
     const first = owner.name.split(' ')[0];
@@ -23,6 +23,12 @@ const Suggest = {
     const pendingDecision = h.openRisks.find((r) => r.decision && !r.decided);
     const plan = (state.commitments || []).filter((c) => c.kr === kr.id);
     const has = (kind) => plan.some((a) => a.kind === kind && a.status === 'open');
+
+    // 0. Marked on track, but the evidence disagrees
+    if (h.status === 'on' && h.hidden && h.hidden.length) {
+      add(8, 'pressure', 'Pressure-test the on-track status',
+        `It's marked on track, but ${h.hidden.join(', ')}. Ask ${first} what would have to go wrong for this to miss, and whether the status should move to at risk now rather than in three weeks.`);
+    }
 
     // 1. A decision is the unblock
     if (pendingDecision) {

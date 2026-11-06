@@ -87,12 +87,25 @@ const Engine = {
     const mh = noDeps ? null : Engine.metricHealth(state, kr);
     if (upstream.length) reasons.push(`waiting on ${upstream.map((d) => d.onKr || U.team(state, d.fromTeam).name).join(', ')}`);
 
+    // "Green on the outside": on-track goals the surrounding evidence contradicts.
+    const hidden = [];
+    if (!noDeps && level === 0 && progress < 1) {
+      const leadsBad = (kr.leads || []).filter((l) => l.value !== l.prev && ((l.value > l.prev) !== (l.good === 'up')));
+      if (leadsBad.length) hidden.push(`${leadsBad.length > 1 ? leadsBad.length + ' leading indicators' : leadsBad[0].name.toLowerCase()} getting worse`);
+      if (upstream.length) hidden.push(`depends on work that is ${upstream.some((d) => d.late) ? 'late' : 'behind'}`);
+      const od = (state.commitments || []).filter((c) => c.kr === kr.id && c.status === 'open' && c.due < state.meta.asOf);
+      if (od.length) hidden.push(`${od.length} overdue commitment${od.length > 1 ? 's' : ''}`);
+      const cs = kr.checkins;
+      if (cs.length >= 3 && Math.abs(cs[cs.length - 1].value - cs[cs.length - 3].value) < Math.abs(kr.target - kr.start) * 0.02) hidden.push('no movement in two weeks');
+      if (confDelta <= -2) hidden.push(`confidence fell ${-confDelta} points`);
+      if (mh && mh.status === 'discrepancy') hidden.push('data sources disagree on the number');
+    }
     const attention = level * 3 + (stale ? 2 : 0) + (confDelta <= -2 ? 1 : 0)
       + openRisks.filter((r) => r.severity === 'high').length * 2 + openRisks.length * 0.5
       + Math.min(3, exposure / 300) + upstream.length * 0.5;
 
     return { value, progress, prevProgress, delta: progress - prevProgress, confidence, confDelta,
-      expected: e, gap, status, stale, daysSince, projected, projectedValue, openRisks, reasons, attention, exposure, upstream, metric: mh };
+      expected: e, gap, status, stale, daysSince, projected, projectedValue, openRisks, reasons, attention, exposure, upstream, metric: mh, hidden };
   },
 
   objective(state, obj) {
@@ -118,8 +131,9 @@ const Engine = {
     const attention = all.filter((x) => x.h.status !== 'on' || x.h.stale)
       .sort((a, b) => b.h.attention - a.h.attention);
     const exposure = all.reduce((a, x) => a + x.h.exposure, 0);
+    const hidden = all.filter((x) => x.h.hidden && x.h.hidden.length).sort((a, b) => b.h.hidden.length - a.h.hidden.length || (b.kr.stake || 0) - (a.kr.stake || 0));
     const commitments = Engine.commitments(state);
-    return { all, counts, progress, expected: Engine.elapsed(state), stale, openRisks, decisions, attention, exposure, commitments };
+    return { all, counts, progress, expected: Engine.elapsed(state), stale, openRisks, decisions, attention, exposure, commitments, hidden };
   },
 
   pendingDecisions(state) {
@@ -261,6 +275,36 @@ const Engine = {
     const totalFte = inits.reduce((a, i) => a + i.fte, 0), totalBudget = inits.reduce((a, i) => a + i.budget, 0);
     const uncovered = state.krs.filter((k) => !inits.some((i) => i.krs.includes(k.id)));
     return { rows, unaligned, totalFte, totalBudget, uncovered };
+  },
+
+  /* ---- Initiative payoff: is the funded work moving the goal it was funded for? ---- */
+  FTE_COST_K: 45, // rough fully loaded cost of one person for a quarter, $K
+  payoff(state, i) {
+    const e = Engine.elapsed(state);
+    const krs = i.krs.map((id) => state.krs.find((k) => k.id === id)).filter(Boolean);
+    const people = i.fte * Engine.FTE_COST_K;
+    const total = (i.budget || 0) + people;
+    const used = (i.spent || 0) + people * e;
+    const burn = total ? used / total : 0;
+    const hs = krs.map((k) => Engine.kr(state, k, true));
+    // Judge against the main goal it was funded for (the first one linked).
+    const main = hs[0];
+    const prog = main ? Math.min(1, main.progress) : 0;
+    const proj = main ? Math.min(1, main.projected) : 0;
+    const worst = main ? { on: 0, risk: 1, off: 2 }[main.status] : 0;
+    let verdict, action, why;
+    if (!krs.length) { verdict = 'nogoal'; action = 'Link to a goal or stop'; why = `${fmtK(used)} used so far on work that isn't tied to any goal.`; }
+    else if (worst === 2 && burn >= 0.2) { verdict = 'stalled'; action = 'Re-scope or stop'; why = `${U.pct(burn)} of its effort is used, but the goal it serves is off track (${U.pct(prog)} of the way there).`; }
+    else if (burn >= 0.3 && prog < e - 0.15) { verdict = 'stalled'; action = 'Re-scope'; why = `${U.pct(burn)} of its effort is used while its goal is ${Math.round((e - prog) * 100)} points behind pace.`; }
+    else if (worst === 0 && prog >= e - 0.05) { verdict = 'paying'; action = 'Continue'; why = `Its goal is on track (${U.pct(prog)} done vs ${U.pct(e)} expected).`; }
+    else if (burn < 0.25) { verdict = 'early'; action = 'Continue and check next month'; why = `Only ${U.pct(burn)} of its effort is used so far.`; }
+    else { verdict = 'watch'; action = 'Watch closely'; why = `Its goal is at risk; on current pace it lands at about ${U.pct(proj)} of target.`; }
+    return { krs, hs, burn, used, total, prog, proj, verdict, action, why };
+  },
+  payoffAll(state) {
+    const rows = (state.initiatives || []).map((i) => ({ i, p: Engine.payoff(state, i) }));
+    const stop = rows.filter((r) => r.p.verdict === 'stalled' || r.p.verdict === 'nogoal');
+    return { rows, stop, atStake: stop.reduce((a, r) => a + (r.p.total - r.p.used), 0) };
   },
 
   /* ---- Goal-setting calibration ---- */

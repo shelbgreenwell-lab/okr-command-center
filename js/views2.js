@@ -93,6 +93,7 @@ function viewReview() {
 }
 
 /* ---------------- Initiatives & resources ---------------- */
+const VERDICT = { paying: 'Paying off', early: 'Too early to tell', watch: 'Watch', stalled: 'Stalled', nogoal: 'Tied to no goal' };
 function viewResources() {
   return viewInitiatives() + viewDeps(true) + `<p class="muted small">Looking for how well teams set goals over time? See <a href="#/history">quarter history</a>.</p>`;
 }
@@ -104,12 +105,17 @@ function viewInitiatives() {
     <div class="rrow-v"><b>${fte.toFixed(1)}</b> FTE<div class="muted tiny">${fmtK(budget)}</div></div></div>`;
   const bars = R.rows.map((r) => { const s = Engine.objective(state, r.obj); return rowBar(`<span class="oid">${r.obj.id}</span> ${lk('objective', r.obj.id, esc(r.obj.title))}`, r.fte, r.budget, 'pbar-' + s.status, STATUS_LABEL[s.status]); }).join('')
     + rowBar('Not linked to any objective', R.unaligned.fte, R.unaligned.budget, 'rbar-none', `${R.unaligned.inits.length} initiatives`);
+  const PA = Engine.payoffAll(state);
+  const stopList = PA.stop.map(({ i, p }) => `<li><span class="vd vd-${p.verdict}">${VERDICT[p.verdict]}</span> ${lk('initiative', i.id, '<b>' + esc(i.title) + '</b>')} <span class="muted small">· ${esc(U.person(state, i.owner).name)}</span>
+    <div class="small">${esc(p.why)} <b>${esc(p.action)}</b> — ${fmtK(p.total - p.used)} of effort still to spend.</div></li>`).join('');
   const rows = (state.initiatives || []).map((i) => {
+    const p = Engine.payoff(state, i);
     const krs = i.krs.map((id) => { const k = state.krs.find((x) => x.id === id); return k ? `<a href="#" data-action="kr" data-id="${id}" data-tip="${esc(k.title)}">${id}</a>` : id; }).join(', ');
     const burn = i.budget ? i.spent / i.budget : 0;
-    return `<tr class="${i.krs.length ? '' : 'unaligned'}"><td><b>${lk('initiative', i.id, esc(i.title), 'plain-lk')}</b><div class="muted tiny">${teamLk(i.team)}</div></td>
+    return `<tr class="${i.krs.length ? '' : 'unaligned'}"><td><b>${lk('initiative', i.id, esc(i.title), 'plain-lk')}</b><div class="muted tiny">${i.promise ? 'Promised: ' + esc(i.promise) : teamLk(i.team)}</div></td>
       <td>${krs || '<span class="tag warn">No key result</span>'}</td><td>${avatar(state, i.owner, 'sm')} <span class="small">${personLk(i.owner)}</span></td>
-      <td class="num">${i.fte}</td><td class="num">${i.budget ? fmtK(i.budget) : '—'}<div class="muted tiny">${i.budget ? U.pct(burn) + ' spent' : '—'}</div></td><td>${pill(i.status)}</td></tr>`;
+      <td class="num">${i.fte}</td><td class="num">${fmtK(p.total)}<div class="muted tiny">${U.pct(p.burn)} used</div></td>
+      <td>${pill(i.status)}</td><td><span class="vd vd-${p.verdict}" data-tip="${esc(p.why)}">${VERDICT[p.verdict]}</span><div class="muted tiny">${esc(p.action)}</div></td></tr>`;
   }).join('');
   const unc = R.uncovered.map((k) => { const h = Engine.kr(state, k); return `<li>${pill(h.status)} <a href="#" data-action="kr" data-id="${k.id}">${esc(k.title)}</a> <span class="muted small">· ${esc(U.person(state, k.owner).name)}</span></li>`; }).join('');
   const offFunded = R.rows.map((r) => ({ r, s: Engine.objective(state, r.obj) })).filter((x) => x.s.status !== 'on');
@@ -118,17 +124,19 @@ function viewInitiatives() {
   <div class="row"><button class="btn" data-action="new-dep">+ Dependency</button><button class="btn" data-action="new-init">+ Initiative</button></div></header>
   <section class="kpis small4">
     <div class="kpi"><div class="kpi-label">People on initiatives</div><div class="kpi-val">${R.totalFte.toFixed(1)}</div><div class="kpi-sub">FTE</div></div>
-    <div class="kpi"><div class="kpi-label">Initiative budget</div><div class="kpi-val">${fmtK(R.totalBudget)}</div><div class="kpi-sub">this quarter</div></div>
+    <div class="kpi link" data-action="scroll-to" data-to="stop-card"><div class="kpi-label">Stop or re-scope</div><div class="kpi-val">${PA.stop.length}</div><div class="kpi-sub">${fmtK(PA.atStake)} of effort still to spend</div></div>
     <div class="kpi"><div class="kpi-label">Not tied to a goal</div><div class="kpi-val">${U.pct(R.unaligned.fte / R.totalFte)}</div><div class="kpi-sub">of people · ${fmtK(R.unaligned.budget)} budget</div></div>
     <div class="kpi"><div class="kpi-label">Key results with no plan</div><div class="kpi-val">${R.uncovered.length}</div><div class="kpi-sub">of ${state.krs.length}</div></div>
   </section>
+  ${stopList ? `<section class="card stop-card" id="stop-card"><div class="card-h"><h2>Stop or re-scope candidates</h2><span class="muted small">Funded work that isn't moving the goal it was funded for</span></div><ul class="plain">${stopList}</ul>
+    <p class="muted tiny">Evidence compares effort used (budget spent plus people time so far) with movement on the main goal each project serves. Owner status is shown alongside so disagreements are visible.</p></section>` : ''}
   <section class="grid2">
     <div class="card"><div class="card-h"><h2>People by company objective</h2><span class="muted small">Bar = FTE; color = objective health</span></div>${bars}
       ${offFunded.length ? `<p class="small callout-plain">${offFunded.map((x) => `<b>${x.r.obj.id}</b> is ${STATUS_LABEL[x.s.status].toLowerCase()} with ${x.r.fte.toFixed(1)} FTE`).join('; ')}. ${R.unaligned.fte ? `Meanwhile ${R.unaligned.fte} FTE sit on work tied to no objective.` : ''}</p>` : ''}</div>
     <div class="card"><div class="card-h"><h2>Key results with no funded work</h2></div><ul class="plain compact">${unc || '<li class="muted">Every key result has an initiative.</li>'}</ul></div>
   </section>
   <div class="sec-h big"><h2>Initiatives</h2><span class="muted small">The funded work behind each goal</span></div>
-  <div class="card flush"><div class="table-wrap"><table class="risks"><thead><tr><th>Initiative</th><th>Drives</th><th>Owner</th><th>FTE</th><th>Budget</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  <div class="card flush"><div class="table-wrap"><table class="risks"><thead><tr><th>Initiative</th><th>Drives</th><th>Owner</th><th>FTE</th><th data-tip="Budget plus people at about $45K per person per quarter">Total effort</th><th>Owner says</th><th>Evidence says</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 /* ---------------- Dependencies ---------------- */
@@ -214,7 +222,7 @@ function viewBoard() {
   const decisions = state.decisions.slice().sort((a, b) => a.date.localeCompare(b.date));
   const pace = P.progress - P.expected;
   const headline = [
-    `${U.pct(P.progress)} of quarterly goals complete at week ${Engine.week(state)} of ${Engine.totalWeeks(state)} (${pace >= -0.05 ? 'on pace' : 'behind pace'}); ${P.counts.on} of ${P.all.length} key results on track.`,
+    `${P.counts.on} of ${P.all.length} key results on track at week ${Engine.week(state)} of ${Engine.totalWeeks(state)}; ${P.counts.off} off track and ${P.counts.risk} at risk.`,
     `${fmtK(P.exposure)} of value at risk, concentrated in ${topExp.map((x) => x.kr.title).slice(0, 2).join(' and ')}.`,
     `Projected quarter score ${projCo.toFixed(2)} vs ${H.company.length ? H.company[H.company.length - 1].toFixed(2) : '—'} last quarter.`,
   ];
@@ -238,6 +246,8 @@ function viewBoard() {
         <li>People on work tied to no objective: <b>${U.pct(R.unaligned.fte / R.totalFte)}</b></li>
         <li>Key results with a current check-in: <b>${P.all.length - P.stale.length} of ${P.all.length}</b></li>
         <li>Decision speed: <b>${Engine.decisionVelocity(state).median ?? '—'} days</b> median from request to decision</li>
+        <li>Marked on track but showing warning signs: <b>${P.hidden.length}</b></li>
+        <li>Funded work to stop or re-scope: <b>${Engine.payoffAll(state).stop.length}</b> (${fmtK(Engine.payoffAll(state).atStake)} of effort still to spend)</li>
         <li>Scorecard numbers trusted: <b>${Engine.integrity(state).counts.trusted} of ${state.krs.length}</b>${Engine.integrity(state).counts.discrepancy ? ` (${Engine.integrity(state).counts.discrepancy} where sources disagree)` : ''}</li></ul></div>
     </div>
   </article>`;

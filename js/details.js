@@ -120,7 +120,9 @@ const DETAIL = {
     return head(`Initiative · ${teamLk(i.team)}`, esc(i.title), `<div class="row">${pill(i.status)}<span class="small">Owner ${personLk(i.owner)}</span></div>`) + `
     <div class="drawer-b">
       <div class="stats"><div><span class="muted tiny">People</span><b>${i.fte} FTE</b></div><div><span class="muted tiny">Budget</span><b>${i.budget ? fmtK(i.budget) : '—'}</b></div><div><span class="muted tiny">Spent</span><b>${i.budget ? fmtK(i.spent) : '—'}</b><span class="muted tiny">${i.budget ? U.pct(burn) + ' of budget' : ''}</span></div></div>
-      ${!krs.length ? '<div class="callout">This work isn\'t tied to any key result. Either link it to a goal or ask whether it should continue.</div>' : ''}
+      ${(() => { const p = Engine.payoff(state, i); return `<div class="mbox payoff"><div class="row"><span class="vd vd-${p.verdict}">${VERDICT[p.verdict]}</span><b class="small">${esc(p.action)}</b></div>
+        ${i.promise ? `<p class="small"><b>Promised:</b> ${esc(i.promise)}</p>` : ''}<p class="small">${esc(p.why)}</p>
+        <div class="muted tiny">Effort used ${fmtK(p.used)} of ${fmtK(p.total)} (budget plus people at ~$${Engine.FTE_COST_K}K per person per quarter). Owner reports: ${STATUS_LABEL[i.status].toLowerCase()}.</div></div>`; })()}
       <h3>Drives</h3>${listOrNone(krs.map(krItem), 'No key results.')}
       <h3>Open blockers on that work</h3>${listOrNone(risks.map(riskItem), 'None.')}
       <div class="row gap"><button class="btn" data-action="edit-initiative" data-id="${i.id}">Edit initiative</button></div>
@@ -239,6 +241,7 @@ function editInitiative(id) {
   const i = state.initiatives.find((x) => x.id === id);
   modal('Edit initiative', [
     { name: 'title', label: 'Initiative', value: i.title, required: true },
+    { name: 'promise', label: 'What it promised', value: i.promise || '', hint: 'The result it was funded to deliver.' },
     { name: 'krs', label: 'Key results it drives (IDs, comma-separated)', value: i.krs.join(', '), hint: 'e.g. KR4, KR2 — leave blank if it isn\'t tied to a goal.' },
     { name: 'owner', label: 'Owner', type: 'select', options: peopleOpts(), value: i.owner, half: true },
     { name: 'status', label: 'Status', type: 'select', options: [['on', 'On track'], ['risk', 'At risk'], ['off', 'Off track']], value: i.status, half: true },

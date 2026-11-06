@@ -532,3 +532,14 @@ table a.lk, .crow a.lk, .attn a.lk { color: inherit; }
 .tour-hl { outline: 3px solid var(--accent) !important; outline-offset: 4px; border-radius: 10px; transition: outline-color .3s; }
 body.drawer-open #tour { left: auto; right: min(580px, 0px); transform: none; right: 20px; bottom: 20px; }
 @media (min-width: 901px) { body.drawer-open #tour { right: auto; left: 260px; } }
+
+/* ---- v11: hidden risk + payoff ---- */
+.green-but { border-left: 3px solid var(--warn); }
+.green-but li .pill { font-size: 10.5px; }
+.vd { display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.vd-paying { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good-ink); }
+.vd-watch { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--text); }
+.vd-stalled, .vd-nogoal { background: color-mix(in srgb, var(--crit) 15%, transparent); color: var(--crit-ink); }
+.stop-card { border-left: 3px solid var(--crit); }
+.mbox.payoff { margin: 4px 0 14px; }
+.mbox.payoff .row { gap: 10px; }

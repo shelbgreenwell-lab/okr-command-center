@@ -24,8 +24,10 @@ This tool treats OKRs as an **operating system**, not a document:
 | Is our meeting rhythm working? | **Operating cadence** — weekly staff, weekly review, monthly review, QBR and offsite, each with decision rights and a pre-read that writes itself |
 | Can I trust these numbers? | **Metric definitions** — definition, source, owner and last-verified date for every number; flagged when systems disagree |
 | Is the work set up to succeed? | **Resources** — people and budget by objective, goals with no funded work, work tied to no goal, and who is waiting on whom |
+| Is anything green actually red? | **Looks green, but…** — on-track goals the evidence contradicts (worsening leading indicators, late upstream work, overdue commitments, stalls, disputed numbers) |
+| What should we stop? Did it pay off? | **Payoff check** — each project's promise vs effort used and goal movement; stop or re-scope candidates with the effort still to spend |
 | What goes in the board pack? | **Board one-pager** — the quarter on one printable page |
-| Can I just ask? | **Ask** — plain-English questions answered from live data, showing how each question was read |
+| Can I just ask? | **Ask** — plain-English questions answered from live data, showing how each question was read. Covers the questions research shows executives struggle with: priorities, cross-team reliance, decision speed, data trust, hidden risk, resource allocation, what to stop, payoff, forecasts and what-ifs, meeting value, capacity and what to tell the board |
 
 New visitors get a **2-minute guided tour** (six stops) from the overview or the sidebar.
 
@@ -37,6 +39,8 @@ New visitors get a **2-minute guided tour** (six stops) from the overview or the
 - **Decisions are tracked like work.** Pending decisions age on the dashboard until made, then move to a decision log.
 - **Silence is a signal.** No check-in for 8+ days marks a key result *stale*.
 - **Diagnosis drives the fix.** Suggestions come from the specific signal: a stuck decision gets a push to decide, an out-of-reach target gets a resources/scope/reset call, a confidence drop gets a conversation, silence gets a request for an update.
+- **Green is a claim, not a fact.** On-track goals are checked against the evidence around them, because bad news is softened on its way up.
+- **Funded work has to earn its keep.** Every project states what it promised and is judged on whether its goal is moving, so stopping work is a routine decision rather than a political one.
 - **Dollars, not just percentages.** Value at risk = value at stake × the share of target projected to be missed.
 - **Commitments are tracked like work.** A silent miss teaches a team that commitments are optional; overdue items stay visible until done or explicitly dropped.
 - **Resources should follow priorities.** Seeing 9% of people on work tied to no goal while two objectives are at risk is the conversation this view exists to start.

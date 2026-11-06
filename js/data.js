@@ -264,22 +264,22 @@ const SEED_COMMITMENTS = [
 
 /* Initiatives: the funded work behind the key results. fte = people, budget/spent in $K. */
 const SEED_INITIATIVES = [
-  { id: 'I1', title: 'Partner referral program', krs: ['KR4'], owner: 'rp', team: 'sales', fte: 2, budget: 120, spent: 40, status: 'risk' },
-  { id: 'I2', title: 'Paid demand campaigns (paused)', krs: ['KR4'], owner: 'rp', team: 'sales', fte: 1, budget: 300, spent: 90, status: 'off' },
-  { id: 'I3', title: 'Deal desk and early solutions engineering', krs: ['KR2', 'KR5', 'KR6'], owner: 'er', team: 'sales', fte: 3, budget: 0, spent: 0, status: 'on' },
-  { id: 'I4', title: 'Pre-approved security pack', krs: ['KR6'], owner: 'rp', team: 'sales', fte: 1, budget: 20, spent: 8, status: 'on' },
-  { id: 'I5', title: 'Account-level P&L build', krs: ['KR7', 'KR3'], owner: 'na', team: 'fin', fte: 2, budget: 60, spent: 35, status: 'on' },
-  { id: 'I6', title: 'Pricing refresh on legacy contracts', krs: ['KR3', 'KR1'], owner: 'pn', team: 'fin', fte: 1, budget: 0, spent: 0, status: 'risk' },
-  { id: 'I7', title: 'Success plans for every account', krs: ['KR12', 'KR9'], owner: 'lc', team: 'cs', fte: 6, budget: 0, spent: 0, status: 'on' },
-  { id: 'I8', title: 'At-risk account recovery program', krs: ['KR13', 'KR9'], owner: 'lc', team: 'cs', fte: 4, budget: 40, spent: 12, status: 'risk' },
-  { id: 'I9', title: 'Critical bug strike team', krs: ['KR16', 'KR10'], owner: 'so', team: 'tech', fte: 3, budget: 140, spent: 0, status: 'off' },
-  { id: 'I10', title: 'Data platform upgrade', krs: ['KR15'], owner: 'cd', team: 'tech', fte: 5, budget: 400, spent: 210, status: 'risk' },
-  { id: 'I11', title: 'Guided setup for new customers', krs: ['KR11'], owner: 'tb', team: 'cs', fte: 3, budget: 80, spent: 55, status: 'on' },
-  { id: 'I12', title: 'Leadership program, cohort 2', krs: ['KR20', 'KR21'], owner: 'ak', team: 'ppl', fte: 1, budget: 90, spent: 30, status: 'on' },
-  { id: 'I13', title: 'Process ownership mapping', krs: ['KR22'], owner: 'jb', team: 'ops', fte: 1, budget: 0, spent: 0, status: 'on' },
-  { id: 'I14', title: 'Software tool consolidation', krs: ['KR23'], owner: 'jb', team: 'ops', fte: 0.5, budget: 0, spent: 0, status: 'risk' },
-  { id: 'I15', title: 'Headquarters office move', krs: [], owner: 'jb', team: 'ops', fte: 2, budget: 250, spent: 60, status: 'on' },
-  { id: 'I16', title: 'Intranet redesign', krs: [], owner: 'ak', team: 'ppl', fte: 1.5, budget: 45, spent: 20, status: 'on' },
+  { id: 'I1', title: 'Partner referral program', promise: 'Add $3M of qualified pipeline from partners', krs: ['KR4'], owner: 'rp', team: 'sales', fte: 2, budget: 120, spent: 40, status: 'risk' },
+  { id: 'I2', title: 'Paid demand campaigns (paused)', promise: 'Add $2.5M of qualified pipeline from paid campaigns', krs: ['KR4'], owner: 'rp', team: 'sales', fte: 1, budget: 300, spent: 90, status: 'off' },
+  { id: 'I3', title: 'Deal desk and early solutions engineering', promise: 'Lift win rate 4 points and cut cycle time 10 days', krs: ['KR2', 'KR5', 'KR6'], owner: 'er', team: 'sales', fte: 3, budget: 0, spent: 0, status: 'on' },
+  { id: 'I4', title: 'Pre-approved security pack', promise: 'Cut security review from 19 days to 7', krs: ['KR6'], owner: 'rp', team: 'sales', fte: 1, budget: 20, spent: 8, status: 'on' },
+  { id: 'I5', title: 'Account-level P&L build', promise: 'Account P&L live for the top 20 customers', krs: ['KR7', 'KR3'], owner: 'na', team: 'fin', fte: 2, budget: 60, spent: 35, status: 'on' },
+  { id: 'I6', title: 'Pricing refresh on legacy contracts', promise: 'Add 1.5 points of gross margin', krs: ['KR3', 'KR1'], owner: 'pn', team: 'fin', fte: 1, budget: 0, spent: 0, status: 'risk' },
+  { id: 'I7', title: 'Success plans for every account', promise: 'Every account on an active success plan', krs: ['KR12', 'KR9'], owner: 'lc', team: 'cs', fte: 6, budget: 0, spent: 0, status: 'on' },
+  { id: 'I8', title: 'At-risk account recovery program', promise: 'Recover 80% of at-risk accounts within 30 days', krs: ['KR13', 'KR9'], owner: 'lc', team: 'cs', fte: 4, budget: 40, spent: 12, status: 'risk' },
+  { id: 'I9', title: 'Critical bug strike team', promise: 'Halve the time to resolve critical bugs', krs: ['KR16', 'KR10'], owner: 'so', team: 'tech', fte: 3, budget: 140, spent: 0, status: 'off' },
+  { id: 'I10', title: 'Data platform upgrade', promise: 'Unblock 5 committed roadmap items', krs: ['KR15'], owner: 'cd', team: 'tech', fte: 5, budget: 400, spent: 210, status: 'risk' },
+  { id: 'I11', title: 'Guided setup for new customers', promise: 'Cut median time-to-value to 35 days', krs: ['KR11'], owner: 'tb', team: 'cs', fte: 3, budget: 80, spent: 55, status: 'on' },
+  { id: 'I12', title: 'Leadership program, cohort 2', promise: 'Graduate 24 managers ready for bigger roles', krs: ['KR20', 'KR21'], owner: 'ak', team: 'ppl', fte: 1, budget: 90, spent: 30, status: 'on' },
+  { id: 'I13', title: 'Process ownership mapping', promise: 'Name an owner for 40 cross-team processes', krs: ['KR22'], owner: 'jb', team: 'ops', fte: 1, budget: 0, spent: 0, status: 'on' },
+  { id: 'I14', title: 'Software tool consolidation', promise: 'Retire 18 overlapping tools', krs: ['KR23'], owner: 'jb', team: 'ops', fte: 0.5, budget: 0, spent: 0, status: 'risk' },
+  { id: 'I15', title: 'Headquarters office move', promise: 'Move headquarters by March', krs: [], owner: 'jb', team: 'ops', fte: 2, budget: 250, spent: 60, status: 'on' },
+  { id: 'I16', title: 'Intranet redesign', promise: 'New intranet live by year end', krs: [], owner: 'ak', team: 'ppl', fte: 1.5, budget: 45, spent: 20, status: 'on' },
 ];
 
 /* Cross-team dependencies: one key result needs something from another team. */
@@ -385,9 +385,7 @@ const PROFILES = {
       { id: 'D1', requested: '2026-10-08', date: '2026-10-12', title: 'Adopt one success plan template for all accounts', owner: 'tb', status: 'made', kr: 'KR12', rationale: 'Three templates in use made coverage impossible to measure.' },
       { id: 'D2', requested: '2026-10-21', date: '2026-10-26', title: 'Add weekend support coverage in two regions', owner: 'tb', status: 'made', kr: 'KR14', rationale: 'Weekend tickets were waiting 30+ hours for a first reply.' },
     ],
-    suggestions: ['What needs my attention this week?', 'Which decisions are waiting on me?', 'Why is critical bug resolution off track?', 'Will we hit our Q4 bookings target?',
-      'What changed since last week?', 'Which numbers can we trust?', 'How much value is at risk?', 'What commitments are overdue?', 'Who is waiting on another team?',
-      'How do we get bookings back on track?', 'What is blocking customer success?', 'Where are our people and budget going?', 'Are our targets too safe or too ambitious?', 'What meetings are coming up?'],
+    suggestions: ['What needs my attention this week?', 'Which decisions are waiting on me?', 'Which green goals might actually be red?', 'What should we stop doing?', 'Will we hit our Q4 bookings target?', 'What if the Tessera deal slips to next quarter?', 'Which numbers can we trust?', 'How much value is at risk?', 'What commitments are overdue?', 'Can teams rely on each other?', 'How fast do we make decisions?', 'Did our initiatives deliver what they promised?', 'Do we have the capacity to do all this?', 'What should I tell the board?'],
   },
 };
 

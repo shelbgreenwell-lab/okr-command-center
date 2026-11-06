@@ -82,6 +82,7 @@ function prereadText(kind) {
     L.push('', '4. RESOURCING');
     R.rows.forEach((r) => L.push(`• ${r.obj.title}: ${r.fte.toFixed(1)} FTE, ${fmtK(r.budget)} — ${STATUS_LABEL[Engine.objective(state, r.obj).status].toLowerCase()}`));
     L.push(`• Not tied to any objective: ${R.unaligned.fte} FTE, ${fmtK(R.unaligned.budget)} (${R.unaligned.inits.map((i) => i.title).join(', ')})`);
+    Engine.payoffAll(state).stop.forEach(({ i, p }) => L.push(`• Stop or re-scope? ${i.title}: ${p.why}`));
     L.push('', '5. DECISIONS FOR THIS MEETING');
     L.push('• Which source is right for each number above');
     L.push('• Whether to move people from unaligned work to at-risk objectives');
@@ -97,6 +98,8 @@ function prereadText(kind) {
     state.teams.filter((t) => t.id !== 'co').forEach((t) => { const c = Engine.calibration(H.teams[t.id] || []); L.push(`• ${t.name}: ${(H.teams[t.id] || []).map((v) => v.toFixed(2)).join(' → ')} — ${c.label.toLowerCase()}`); });
     L.push('', 'CARRY FORWARD OR RETIRE (projected below 0.7)');
     P.all.filter((x) => x.h.projected < 0.7).forEach((x) => L.push(`• ${x.kr.title} — projected ${Math.min(1, x.h.projected).toFixed(2)}; ${x.h.reasons.join(', ') || 'behind pace'}`));
+    L.push('', 'STOP OR CONTINUE: FUNDED WORK');
+    Engine.payoffAll(state).rows.forEach(({ i, p }) => L.push(`• ${i.title} — ${VERDICT[p.verdict].toLowerCase()}: ${p.action.toLowerCase()}. ${p.why}`));
     L.push('', 'DECISIONS MADE THIS QUARTER');
     state.decisions.forEach((d) => L.push(`• ${U.date(d.date)}: ${d.title}`));
     L.push('', 'QUESTIONS FOR NEXT QUARTER');
